@@ -153,12 +153,14 @@ function(correct_platform_strings)
         # configuration to <sel4 kernel>/src/plat/*/config.cmake
         #
         "-KernelARMPlatform"
-        "imx6:sabre,wandq"
-        "imx31:kzm"
-        "bcm2837:rpi3"
-        "bcm2711:rpi4"
+        "imx6:sabre,imx6-sabre,wandq,imx6-wandq"
+        "imx7:imx7-sabre"
+        "imx31:kzm,imx31-kzm"
+        "bcm2837:rpi3,bcm2837-rpi3"
+        "bcm2711:rpi4,bcm2711-rpi4"
         "exynos5:exynos5250,exynos5410,exynos5422"
         "am335x:am335x-boneblack,am335x-boneblue"
+        "zynqmp:zcu102,zynqmp-zcu102,ultra96,zynqmp-ultra96"
         "-KernelSel4Arch"
         "pc99:x86_64,ia32"
     )
