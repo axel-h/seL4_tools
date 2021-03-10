@@ -6,13 +6,14 @@
 
 #include <autoconf.h>
 #include <elfloader/gen_config.h>
+#include "image_start_addr.h"
 
 OUTPUT_ARCH( "riscv" )
 ENTRY( _start )
 
 SECTIONS
 {
-    . = 0x0000000080400000;
+    . = IMAGE_START_ADDR;
     _text = .;
     .start :
     {
