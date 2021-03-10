@@ -282,6 +282,7 @@ static int load_elf(
     /* Print diagnostics. */
     printf("  paddr=[%p..%p]\n", dest_paddr, dest_paddr + image_size - 1);
     printf("  vaddr=[%p..%p]\n", (vaddr_t)min_vaddr, (vaddr_t)max_vaddr - 1);
+    printf("  size=%zu\n", image_size);
     printf("  virt_entry=%p\n", (vaddr_t)elf_getEntryPoint(elf_blob));
 
     /* Ensure the ELF file is valid. */
