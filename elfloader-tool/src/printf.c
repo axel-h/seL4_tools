@@ -225,25 +225,8 @@ static void arch_write_char(
     void *num_chars_printed_ptr,
     int c)
 {
-    int *num_chars_printed = (int *)num_chars_printed_ptr;
-
-    /* For now, console output goes into a UART on every platform eventually
-     * and we write a '\r' (CR) before every '\n' (LF) unconditinally. If there
-     * will even be a console that works differently, we can still add a
-     * configuration flag that allows disabling this feature.
-     */
-    if (c == '\n') {
-        /* TODO: There is no "(*num_chars_printed)++;" here, as the CR char has
-         *       never been counted by any platform specific implementations in
-         *       the past. For now the behavior is kept, but it seem quite
-         *       wrong to hide this. Check if any code depends really on this
-         *       and consider counting the CR char also.
-         */
-        plat_console_putchar('\r');
-    }
-
-    (*num_chars_printed)++;
     plat_console_putchar(c);
+    *((int *)num_chars_printed_ptr) += 1;
 }
 
 int printf(
