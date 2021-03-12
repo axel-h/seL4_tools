@@ -157,7 +157,7 @@ static inline void enable_virtual_memory(void)
     ifence();
 }
 
-int num_apps = 0;
+unsigned int num_apps = 0;
 void main(UNUSED int hartid, void *bootloader_dtb)
 {
     printf("ELF-loader started on (HART %d) (NODES %d)\n", hartid, CONFIG_MAX_NUM_NODES);
