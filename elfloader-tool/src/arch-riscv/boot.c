@@ -83,7 +83,7 @@ void map_kernel_window(struct image_info *kernel_info)
                                          (page << PT_LEVEL_2_BITS));
         }
     } else {
-        printf("Elfloader not properly aligned\n");
+        printf("ERROR: ELF Loader not properly aligned\n");
         abort();
     }
 
@@ -102,7 +102,7 @@ void map_kernel_window(struct image_info *kernel_info)
                                          (page << PT_LEVEL_2_BITS));
         }
     } else {
-        printf("Kernel not properly aligned\n");
+        printf("ERROR: Kernel not properly aligned\n");
         abort();
     }
 }
@@ -164,9 +164,17 @@ void main(UNUSED int hartid, void *bootloader_dtb)
 
     printf("  paddr=[%p..%p]\n", _text, _end - 1);
     /* Unpack ELF images into memory. */
-    load_images(&kernel_info, &user_info, 1, &num_apps, bootloader_dtb, &dtb, &dtb_size);
+    int ret = load_images(&kernel_info, &user_info, 1, &num_apps,
+                          bootloader_dtb, &dtb, &dtb_size);
+
+    if (0 != ret) {
+        printf("ERROR: image loading failed\n");
+        abort();
+    }
+
     if (num_apps != 1) {
-        printf("No user images loaded!\n");
+        printf("ERROR: expected to load just 1 app, actually loaded %u apps\n",
+               num_apps);
         abort();
     }
 
@@ -195,7 +203,9 @@ void main(UNUSED int hartid, void *bootloader_dtb)
                                                  );
 
     /* We should never get here. */
-    printf("Kernel returned back to the elf-loader.\n");
+    printf("ERROR: Kernel returned back to the ELF Loader\n");
+    abort();
+
 }
 
 #if CONFIG_MAX_NUM_NODES > 1
