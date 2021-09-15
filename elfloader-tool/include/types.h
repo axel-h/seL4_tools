@@ -46,18 +46,18 @@ typedef signed int      int32_t;
 typedef unsigned int    uint32_t;
 
 
-#if defined(__KERNEL_32__)
+#if CONFIG_WORD_SIZE == 32
 
 #define _int64_type         long long
 #define _int64_type_fmt     ll  // for printf() formatting and integer suffix
 
-#elif defined(__KERNEL_64__)
+#elif CONFIG_WORD_SIZE == 64
 
 #define _int64_type         long
 #define _int64_type_fmt     l  // for printf() formatting and integer suffix
 
 #else
-#error expecting either __KERNEL_32__ or __KERNEL_64__ to be defined
+#error invalid CONFIG_WORD_SIZE
 #endif
 
 compile_assert(valid_int64_type, 8 == sizeof(_int64_type));
@@ -95,14 +95,14 @@ typedef uint64_t    uintmax_t;
 /*------------------------------------------------------------------------------
  * define [u]intptr_t
  */
-#if defined(__KERNEL_32__)
+#if CONFIG_WORD_SIZE == 32
 
 typedef int32_t         intptr_t;
 typedef uint32_t        uintptr_t;
 #define UINTPTR_MAX     UINT32_MAX
 #define _ptr_type_fmt   /* empty */
 
-#elif defined(__KERNEL_64__)
+#elif CONFIG_WORD_SIZE == 64
 
 typedef int64_t         intptr_t;
 typedef uint64_t        uintptr_t;
@@ -110,7 +110,7 @@ typedef uint64_t        uintptr_t;
 #define _ptr_type_fmt   _int64_type_fmt
 
 #else
-#error expecting either __KERNEL_32__ or __KERNEL_64__ to be defined
+#error invalid CONFIG_WORD_SIZE
 #endif
 
 /* printf() format specifiers for [u]intptr_t */
