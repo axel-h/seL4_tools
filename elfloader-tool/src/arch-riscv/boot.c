@@ -344,11 +344,43 @@ void main(word_t hart_id, void *bootloader_dtb)
      */
     acquire_multicore_lock();
     set_secondary_cores_go();
-    word_t i = 0;
-    while (i < CONFIG_MAX_NUM_NODES && hsm_exists) {
-        i++;
-        if (i != hart_id) {
-            sbi_hart_start(i, secondary_harts, i);
+    /* Start all cores */
+    if (!hsm_exists) {
+        /* Without the HSM extension, we can't start the cores explicitly. But
+         * they might be running already, so we do nothing here and just hope
+         * things work out. If the secondary cores don't start we are stuck.
+         */
+        printf("no HSM extension, let's hope secondary cores have been started\n");
+    } else {
+        /* If we are running on a platform with SBI HSM extension support, no
+         * other hart is running. The system starts harts in a random hart, but
+         * the assembly startup code has done the migration to the designated
+         * primary hart already and stopped the others. The global variable
+         * logical_core_id must still be untouched here, otherwise something is
+         * badly wrong.
+         */
+        if (1 != next_logical_core_id) {
+            printf("ERROR: logical core IDs have been assigned already\n");
+            abort();
+            UNREACHABLE();
+        }
+        /* Start all harts */
+        for (int i = 0; i < CONFIG_MAX_NUM_NODES; i++) {
+            word_t remote_hart_id = i + 1; /* hart IDs start at 1 */
+            if (remote_hart_id == CONFIG_FIRST_HART_ID) {
+                assert(remote_hart_id == hart_id)
+                continue; /* this is the current hart */
+            }
+            /* Pass DTB as custom parameter to remote hart */
+            sbi_hsm_ret_t ret = sbi_hart_start(remote_hart_id,
+                                               secondary_harts,
+                                               bootloader_dtb);
+            if (SBI_SUCCESS != ret.code) {
+                printf("ERROR: could not start hart %"PRIu_word", failure"
+                       " (%d, %d)\n", remote_hart_id, ret.code, ret.data);
+                abort();
+                UNREACHABLE();
+            }
         }
     }
 

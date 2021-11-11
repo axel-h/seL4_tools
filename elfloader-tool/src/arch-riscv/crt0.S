@@ -101,12 +101,8 @@ hsm_switch_hart:
   mv a2, s2 /* dtb address to be passed in a1 when new hart starts is 3rd parameter */
   la a1, _start1 /* where to start the hart */
   ecall /* call SBI to start hart FIRST_HART_ID */
-
-  /* Since we are not the designated primary hart, continue the boot process as
-   * secondary hart
-   */
-  mv a0, s0 /* restore a0 to hold hart ID passed by OpenSBI */
-  j secondary_harts
+  /* Stop current hart, the boot code may bring it up again when needed. */
+  j hsm_suspend_hart
 
 /*----------------------------------------------------------------------------*/
 _start1:
