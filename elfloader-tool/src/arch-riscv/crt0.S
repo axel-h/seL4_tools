@@ -13,6 +13,7 @@
 .extern elfloader_stack
 .extern hsm_exists
 #if CONFIG_MAX_NUM_NODES > 1
+.extern secondary_hart_main
 .extern next_logical_core_id
 #endif
 
@@ -170,7 +171,7 @@ secondary_harts:
   slli t0, t0, CONFIG_KERNEL_STACK_BITS /* t0 = t0 * BIT(CONFIG_KERNEL_STACK_BITS) */
   la sp, elfloader_stack
   add sp, sp, t0
-  la s0, secondary_entry
+  la s0, secondary_hart_main
   jr s0
 #endif
 /* If we get here then the HSM extension exists and the current
