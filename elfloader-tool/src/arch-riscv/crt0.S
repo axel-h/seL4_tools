@@ -115,6 +115,10 @@ _start1:
  * different HART to the one that we have been on in _start. The original hart
  * we came from will get a different stack in secondary_harts.
  */
+
+  li s0, CONFIG_FIRST_HART_ID
+  bne  a0, s0, secondary_harts
+
 .option push
 .option norelax
 1:auipc gp, %pcrel_hi(__global_pointer$)
