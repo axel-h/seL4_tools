@@ -10,7 +10,11 @@
 
 .extern main
 .extern __global_pointer$
+.extern elfloader_stack
 .extern hsm_exists
+#if CONFIG_MAX_NUM_NODES > 1
+.extern next_logical_core_id
+#endif
 
 #define BIT(n) (1 << (n))
 
@@ -56,7 +60,7 @@ _start:
   mv s2, a1 /* preserve a1 (dtb) in s2 */
 
   /* Attach the stack to sp before calling any C functions */
-  la sp, (core_stack_alloc + BIT(12))
+  la sp, (elfloader_stack + BIT(CONFIG_KERNEL_STACK_BITS))
 
   /*
    * Binary images may not be loaded in the correct location.
@@ -134,19 +138,13 @@ _start1: /* a0 must hold current hard ID passed by bootloader */
   /* This HART may be a different HART to the one that started at _start
    * If we've switched HARTs then the other HART will get a different stack
    * region in secondary_harts. */
-  la sp, (core_stack_alloc + BIT(12))
+  la sp, (elfloader_stack + BIT(CONFIG_KERNEL_STACK_BITS))
   /* The C code expects the registers to be set up as:
    *   a0 = hart id
    *   a1 = dtb
    */
   la s0, main
   jr s0
-
-#if CONFIG_MAX_NUM_NODES > 1
-.extern next_logical_core_id
-#endif
-
-.text
 
 .global secondary_harts
 secondary_harts:
@@ -166,10 +164,10 @@ secondary_harts:
   amoadd.w a1, t0, (a1)
   li t0, CONFIG_MAX_NUM_NODES
   bge a1, t0, hsm_suspend_hart
-
-  addi t0, a1, 1
-  slli t0, t0, 12
-  la sp, core_stack_alloc
+  /* setup the hart specific stack pointer */
+  addi t0, a1, 1 /* increment by one because we need to set sp to the end */
+  slli t0, t0, CONFIG_KERNEL_STACK_BITS /* t0 = t0 * BIT(CONFIG_KERNEL_STACK_BITS) */
+  la sp, elfloader_stack
   add sp, sp, t0
   la s0, secondary_entry
   jr s0
