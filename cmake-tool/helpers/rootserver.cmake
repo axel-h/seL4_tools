@@ -85,7 +85,7 @@ function(DeclareRootserver rootservername)
                 $<TARGET_FILE:${rootservername}>
                 ${rootservername}
         )
-    elseif(KernelArchARM OR KernelArchRiscV)
+    elseif(KernelArchARM OR KernelArchRiscV OR KernelArchACME)
         set(
             IMAGE_NAME
             "${CMAKE_BINARY_DIR}/images/${rootservername}-image-${KernelArch}-${KernelPlatform}"
