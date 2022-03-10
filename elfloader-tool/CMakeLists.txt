@@ -26,7 +26,7 @@ config_choice(
     ElfloaderImage
     ELFLOADER_IMAGE
     "Boot image type"
-    "elf;ElfloaderImageELF;IMAGE_ELF;KernelArchARM OR KernelArchRiscV"
+    "elf;ElfloaderImageELF;IMAGE_ELF;KernelArchARM OR KernelArchRiscV OR KernelArchACME"
     "binary;ElfloaderImageBinary;IMAGE_BINARY;KernelArchARM OR KernelArchRiscV"
     "efi;ElfloaderImageEFI;IMAGE_EFI;KernelArchARM"
     "uimage;ElfloaderImageUimage;IMAGE_UIMAGE;KernelArchARM"
