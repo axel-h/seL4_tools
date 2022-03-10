@@ -53,6 +53,14 @@ function(check_arch_clang)
                 correct_triple
                 ${TRIPLE}
         )
+    elseif(KernelSel4ArchACME64)
+        string(
+            REGEX
+                MATCH
+                "^riscv64"
+                correct_triple
+                ${TRIPLE}
+        )
     else()
         message(FATAL_ERROR "unsupported KernelSel4Arch '${KernelSel4Arch}'")
     endif()
@@ -81,6 +89,8 @@ function(check_arch_gcc)
     elseif(KernelSel4ArchRiscV32)
         set(compiler_variable "__riscv_xlen == 32")
     elseif(KernelSel4ArchRiscV64)
+        set(compiler_variable "__riscv_xlen == 64")
+    elseif(KernelSel4ArchACME64)
         set(compiler_variable "__riscv_xlen == 64")
     else()
         message(FATAL_ERROR "unsupported KernelSel4Arch '${KernelSel4Arch}'")
