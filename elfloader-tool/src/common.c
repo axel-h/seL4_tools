@@ -17,13 +17,19 @@
 #include <elfloader.h>
 #include <fdt.h>
 
-#ifdef CONFIG_HASH_SHA
+#if defined(CONFIG_HASH_SHA)
 #include "crypt_sha256.h"
-#elif CONFIG_HASH_MD5
+#define ELFLOADER_CHECK_HASH
+#elif defined(CONFIG_HASH_MD5)
 #include "crypt_md5.h"
+#define ELFLOADER_CHECK_HASH
+#elif !defined(CONFIG_HASH_NONE)
+#error "invalid configuration"
 #endif
 
+#ifdef ELFLOADER_CHECK_HASH
 #include "hash.h"
+#endif
 
 #ifdef CONFIG_ELFLOADER_ROOTSERVERS_LAST
 #include <platform_info.h> // this provides memory_region
@@ -89,6 +95,77 @@ static int ensure_phys_range_valid(
 
     return 0;
 }
+
+#ifdef ELFLOADER_CHECK_HASH
+/*
+ * Read hash file from CPIO archive and check if blob hash matches
+ */
+static int check_hash(
+    void const *blob,
+    size_t blob_size,
+    void const *cpio,
+    size_t cpio_len,
+    char const *hash_filename)
+{
+    /* Get the binary file that contains the Hash */
+    unsigned long cpio_file_size = 0;
+    void const *file_hash = cpio_get_file(cpio,
+                                          cpio_len,
+                                          hash_filename,
+                                          &cpio_file_size);
+
+    /* If the file hash doesn't have a pointer, the file doesn't exist, so we
+     * cannot confirm the file is what we expect.
+     */
+    if (file_hash == NULL) {
+        printf("ERROR: hash file '%s' doesn't exist\n", hash_filename);
+        return -1;
+    }
+
+    /* Ensure we can safely cast the CPIO API type to our preferred type. */
+    _Static_assert(sizeof(cpio_file_size) <= sizeof(size_t),
+                   "integer model mismatch");
+    size_t file_hash_len = (size_t)cpio_file_size;
+
+#if defined(CONFIG_HASH_SHA)
+    uint8_t calculated_hash[32];
+    hashes_t hashes = { .hash_type = SHA_256 };
+#elif defined(CONFIG_HASH_MD5)
+    uint8_t calculated_hash[16];
+    hashes_t hashes = { .hash_type = MD5 };
+#else
+#error "unsupported hash algorithm"
+#endif
+
+    if (file_hash_len < sizeof(calculated_hash)) {
+        printf("ERROR: hash file '%s' size %u invalid, expected at least %u\n",
+               hash_filename, file_hash_len, sizeof(calculated_hash));
+    }
+
+    /* Print the Hash for the user to see */
+    printf("Hash from ELF File: ");
+    print_hash(file_hash, sizeof(calculated_hash));
+
+    /* This does not return anything */
+    get_hash(hashes, blob, blob_size, calculated_hash);
+
+    /* Print the hash so the user can see they're the same or different */
+    printf("Hash for ELF Input: ");
+    print_hash(calculated_hash, sizeof(calculated_hash));
+
+    /* Check the hashes are the same. There is no memcmp() in the striped down
+     * runtime lib of ELF Loader, so we compare here byte per byte.
+     */
+    for (unsigned int i = 0; i < sizeof(calculated_hash); i++) {
+        if (((char const *)file_hash)[i] != ((char const *)calculated_hash)[i]) {
+            printf("ERROR: Hashes are different\n");
+            return -1;
+        }
+    }
+
+    return 0;
+}
+#endif /* ELFLOADER_CHECK_HASH */
 
 /*
  * Unpack an ELF file to the given physical address.
@@ -173,12 +250,9 @@ static int unpack_elf_to_paddr(
  * address used.
  */
 static int load_elf(
-    void const *cpio,
-    size_t cpio_len,
     const char *name,
     void const *elf_blob,
-    size_t elf_blob_size,
-    char const *elf_hash_filename,
+    size_t elf_blob_size __attribute__((unused)),
     paddr_t dest_paddr,
     int keep_headers,
     struct image_info *info,
@@ -215,69 +289,6 @@ static int load_elf(
         printf("ERROR: Input ELF file not 4-byte aligned in memory\n");
         return -1;
     }
-
-#ifdef CONFIG_HASH_NONE
-
-    UNUSED_VARIABLE(cpio);
-    UNUSED_VARIABLE(cpio_len);
-    UNUSED_VARIABLE(elf_blob_size);
-    UNUSED_VARIABLE(elf_hash_filename);
-
-#else
-
-    /* Get the binary file that contains the Hash */
-    unsigned long cpio_file_size = 0;
-    void const *file_hash = cpio_get_file(cpio,
-                                          cpio_len,
-                                          elf_hash_filename,
-                                          &cpio_file_size);
-
-    /* If the file hash doesn't have a pointer, the file doesn't exist, so we
-     * cannot confirm the file is what we expect.
-     */
-    if (file_hash == NULL) {
-        printf("ERROR: hash file '%s' doesn't exist\n", elf_hash_filename);
-        return -1;
-    }
-
-    /* Ensure we can safely cast the CPIO API type to our preferred type. */
-    _Static_assert(sizeof(cpio_file_size) <= sizeof(size_t),
-                   "integer model mismatch");
-    size_t file_hash_len = (size_t)cpio_file_size;
-
-#ifdef CONFIG_HASH_SHA
-    uint8_t calculated_hash[32];
-    hashes_t hashes = { .hash_type = SHA_256 };
-#else
-    uint8_t calculated_hash[16];
-    hashes_t hashes = { .hash_type = MD5 };
-#endif
-
-    if (file_hash_len < sizeof(calculated_hash)) {
-        printf("ERROR: hash file '%s' size %u invalid, expected at least %u\n",
-               elf_hash_filename, file_hash_len, sizeof(calculated_hash));
-    }
-
-    /* Print the Hash for the user to see */
-    printf("Hash from ELF File: ");
-    print_hash(file_hash, sizeof(calculated_hash));
-
-    get_hash(hashes, elf_blob, elf_blob_size, calculated_hash);
-
-    /* Print the hash so the user can see they're the same or different */
-    printf("Hash for ELF Input: ");
-    print_hash(calculated_hash, sizeof(calculated_hash));
-
-    /* Check the hashes are the same. There is no memcmp() in the striped down
-     * runtime lib of ELF Loader, so we compare here byte per byte. */
-    for (unsigned int i = 0; i < sizeof(calculated_hash); i++) {
-        if (((char const *)file_hash)[i] != ((char const *)calculated_hash)[i]) {
-            printf("ERROR: Hashes are different\n");
-            return -1;
-        }
-    }
-
-#endif  /* CONFIG_HASH_NONE */
 
     /* Print diagnostics. */
     printf("  paddr=[%p..%p]\n", dest_paddr, dest_paddr + image_size - 1);
@@ -414,6 +425,16 @@ int load_images(
                    "integer model mismatch");
     size_t kernel_elf_blob_size = (size_t)cpio_file_size;
 
+#ifdef ELFLOADER_CHECK_HASH
+    /* Check kernel image hash */
+    ret = check_hash(kernel_elf_blob, kernel_elf_blob_size,
+                     cpio, cpio_len, "kernel.bin");
+    if (0 != ret) {
+        printf("ERROR: hash check failed for kernel image (%d)\n", ret);
+        return -1;
+    }
+#endif /* ELFLOADER_CHECK_HASH */
+
     ret = elf_checkFile(kernel_elf_blob);
     if (ret != 0) {
         printf("ERROR: Kernel image not a valid ELF file\n");
@@ -496,12 +517,9 @@ int load_images(
     }
 
     /* Load the kernel */
-    ret = load_elf(cpio,
-                   cpio_len,
-                   "kernel",
+    ret = load_elf("kernel",
                    kernel_elf_blob,
                    kernel_elf_blob_size,
-                   "kernel.bin", // hash file
                    (paddr_t)kernel_phys_start,
                    0, // don't keep ELF headers
                    kernel_info,
@@ -590,13 +608,21 @@ int load_images(
                        "integer model mismatch");
         size_t elf_filesize = (size_t)cpio_file_size;
 
+#ifdef ELFLOADER_CHECK_HASH
+        /* Check user image hash. Since the name of the file with the hash is
+         * hard-coded here, this supports havin one user image only. Currently
+         * there is no use case where multiple images are used anyway.
+         */
+        ret = check_hash(user_elf, elf_filesize, cpio, cpio_len, "app.bin");
+        if (0 != ret) {
+            printf("ERROR: hash check failed for %s (%d)\n", elf_filename, ret);
+            return -1;
+        }
+#endif /* ELFLOADER_CHECK_HASH */
         /* Load the file into memory. */
-        ret = load_elf(cpio,
-                       cpio_len,
-                       elf_filename,
+        ret = load_elf(elf_filename,
                        user_elf,
                        elf_filesize,
-                       "app.bin", // hash file
                        next_phys_addr,
                        1,  // keep ELF headers
                        &user_info[*num_images],
