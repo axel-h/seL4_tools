@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <types.h>
 
 typedef uintptr_t paddr_t;
@@ -41,6 +42,9 @@ typedef uintptr_t vaddr_t;
 typedef struct {
     paddr_t phys_base;
     size_t size;
+#ifdef CONFIG_ELFLOADER_INCLUDE_DTB
+    bool is_from_cpio;
+#endif
 } dtb_info_t;
 
 /*
