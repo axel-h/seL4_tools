@@ -99,7 +99,7 @@ void relocate_below_kernel(void)
  *
  * Unpack images, setup the MMU, jump to the kernel.
  */
-void main(UNUSED void *arg)
+void main(UNUSED void *arg0, UNUSED void *arg1, UNUSED void *arg2, UNUSED void *arg3)
 {
     void *bootloader_dtb = NULL;
 
@@ -114,6 +114,7 @@ void main(UNUSED void *arg)
     /* Print welcome message. */
     printf("\nELF-loader started on ");
     print_cpuid();
+    printf("  args: %p, %p, %p, %p\n", arg0, arg1, arg2, arg3);
     printf("  paddr=[%p..%p]\n", _text, _end - 1);
 
 #if defined(CONFIG_IMAGE_UIMAGE)

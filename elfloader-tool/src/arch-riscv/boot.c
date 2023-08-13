@@ -287,12 +287,16 @@ void secondary_entry(int hart_id, int core_id)
 
 #endif
 
-void main(int hart_id, void *bootloader_dtb)
+void main(void *arg0, void *arg1, UNUSED void *arg2, UNUSED void *arg3)
 {
+    int hart_id = (int)(uintptr_t)arg0;
+    void *bootloader_dtb = arg1;
+
     /* Printing uses SBI, so there is no need to initialize any UART. */
     printf("ELF-loader started on (HART %d) (NODES %d)\n",
            hart_id, CONFIG_MAX_NUM_NODES);
 
+    printf("  args: %p, %p, %p, %p\n", arg0, arg1, arg2, arg3);
     printf("  paddr=[%p..%p]\n", _text, _end - 1);
 
     /* Run the actual ELF loader, this is not expected to return unless there
