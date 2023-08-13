@@ -17,12 +17,16 @@ word_t read_cpuid_mpidr(void)
     return val & MPIDR_MASK;
 }
 
-#define CURRENTEL_EL2           (2 << 2)
-word_t is_hyp_mode(void)
+word_t get_cpu_mode(void)
 {
     uint32_t val;
     asm volatile("mrs %x0, CurrentEL" : "=r"(val) :: "cc");
-    return (val == CURRENTEL_EL2);
+    return val >> 2;
+}
+
+word_t is_hyp_mode(void)
+{
+    return (get_cpu_mode() == 2); // EL2
 }
 
 uint32_t read_cpuid_id(void)
