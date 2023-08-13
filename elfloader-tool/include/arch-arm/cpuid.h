@@ -14,6 +14,9 @@ uint32_t read_cpuid_id(void);
 /* read MP ID register from CPUID */
 uint32_t read_cpuid_mpidr(void);
 
+/* CPSR mod in ARMv7, EL on ARMv8. */
+word_t get_cpu_mode(void);
+
 /* check if CPU is in HYP/EL2 mode */
 word_t is_hyp_mode(void);
 
