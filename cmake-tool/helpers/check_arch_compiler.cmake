@@ -5,59 +5,22 @@
 #
 
 function(check_arch_clang)
-    if(KernelSel4ArchIA32)
-        string(
-            REGEX
-                MATCH
-                "^x86_64"
-                correct_triple
-                "${TRIPLE}"
-        )
-    elseif(KernelSel4ArchX86_64)
-        string(
-            REGEX
-                MATCH
-                "^x86_64"
-                correct_triple
-                "${TRIPLE}"
-        )
+    if(KernelSel4ArchIA32 OR KernelSel4ArchX86_64)
+        set(triple_regex "^x86_64")
     elseif(KernelSel4ArchAarch32) # also set for arm_hyp
-        string(
-            REGEX
-                MATCH
-                "^arm"
-                correct_triple
-                "${TRIPLE}"
-        )
+        set(triple_regex "^arm")
     elseif(KernelSel4ArchAarch64)
-        string(
-            REGEX
-                MATCH
-                "^aarch64"
-                correct_triple
-                "${TRIPLE}"
-        )
+        set(triple_regex "^aarch64")
     elseif(KernelSel4ArchRiscV32)
-        string(
-            REGEX
-                MATCH
-                "^riscv(32|64)"
-                correct_triple
-                "${TRIPLE}"
-        )
+        set(triple_regex "^riscv(32|64)")
     elseif(KernelSel4ArchRiscV64)
-        string(
-            REGEX
-                MATCH
-                "^riscv64"
-                correct_triple
-                "${TRIPLE}"
-        )
+        set(triple_regex "^riscv64")
     else()
         message(FATAL_ERROR "unsupported KernelSel4Arch '${KernelSel4Arch}'")
     endif()
 
-    if(NOT correct_triple)
+    string(REGEX MATCH ${triple_regex} matched_triple ${TRIPLE})
+    if(NOT matched_triple)
         message(FATAL_ERROR "Clang Triple '${TRIPLE}' isn't for KernelSel4Arch '${KernelSel4Arch}'")
     endif()
 
@@ -108,7 +71,10 @@ endfunction()
 function(check_arch_compiler)
     if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
         check_arch_clang()
-    else()
         check_arch_gcc()
+    elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        check_arch_gcc()
+    else()
+        message(FATAL_ERROR "unsupported CMAKE_C_COMPILER_ID: '${CMAKE_C_COMPILER_ID}'")
     endif()
 endfunction()
