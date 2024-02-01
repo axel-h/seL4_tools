@@ -85,6 +85,12 @@ macro(gcc_print_file_name var file)
         ERROR_VARIABLE IgnoreErrorOutput
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
+    # If the file is not used, the input name is returned. There is no error.
+    if("${var}" STREQUAL ${file}")
+        message(WARNING "lib not found: ${file}")
+        set(${var} "")
+    endif()
+
 endmacro()
 
 macro(find_libgcc_files)
