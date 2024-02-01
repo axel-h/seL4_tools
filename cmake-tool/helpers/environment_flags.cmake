@@ -94,24 +94,23 @@ macro(gcc_print_file_name var file)
 endmacro()
 
 macro(find_libgcc_files)
-
     # find the compilers crtbegin and crtend files
-    gcc_print_file_name(CRTBeginFile crtbegin.o)
-    gcc_print_file_name(CRTEndFile crtend.o)
-
     # Empty crt files variables if not found in the current toolchain.
     # This should allow building/linking without cxx crt files (e.g., just C projects).
-    if("${CRTBeginFile}" STREQUAL "crtbegin.o" OR "${CRTEndFile}" STREQUAL "crtend.o")
-        message(WARNING "cxx: no crt object files found.")
-        set(CRTBeginFile "")
-        set(CRTEndFile "")
+    gcc_print_file_name(CRTBeginFile "crtbegin.o")
+    gcc_print_file_name(CRTEndFile "crtend.o")
+
+    set(gcc_libs "gcc")
+    # Use libgcc_eh if it exists
+    gcc_print_file_name(libgcc_eh "libgcc_eh.a")
+    if(NOT "${libgcc_eh}" STREQUAL "")
+        list(APPEND gcc_libs "gcc_eh")
     endif()
 
-    gcc_print_file_name(libgcc_eh libgcc_eh.a)
-    set(libgcc "-lgcc")
-    if(NOT "${libgcc_eh}" STREQUAL "libgcc_eh.a")
-        set(libgcc "${libgcc} -lgcc_eh")
-    endif()
+    set(libgcc "")
+    foreach(l in LISTS gcc_libs)
+        set(libgcc "${libgcc} -l${l}")
+    endforeach()
 endmacro()
 
 # Call check_c_source_runs but set the cache variables
