@@ -509,6 +509,11 @@ int load_images(
     void const *cpio = _archive_start;
     size_t cpio_len = _archive_start_end - _archive_start;
 
+    /* Set defaults. */
+    if (num_images) {
+        *num_images = 0;
+    }
+
     /* Load kernel. */
     unsigned long cpio_file_size = 0;
     void const *kernel_elf_blob = cpio_get_file(cpio,
@@ -649,7 +654,6 @@ int load_images(
 
 #endif /* CONFIG_ELFLOADER_ROOTSERVERS_LAST */
 
-    *num_images = 0;
     for (unsigned int i = 0; i < max_user_images; i++) {
         /* Fetch info about the next ELF file in the archive. */
         unsigned long cpio_file_size = 0;
