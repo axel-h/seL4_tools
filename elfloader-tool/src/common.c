@@ -295,7 +295,9 @@ static int load_elf(
     printf("  vaddr=[%p..%p]\n", (vaddr_t)min_vaddr, (vaddr_t)max_vaddr - 1);
     printf("  virt_entry=%p\n", (vaddr_t)elf_getEntryPoint(elf_blob));
 
-    /* Ensure the ELF file is valid. */
+    /* Ensure the ELF blob is valid. Unfortunately, elf_checkFile() does not
+     * take a "size" parameter, so calling this is potentially dangerous.
+     */
     ret = elf_checkFile(elf_blob);
     if (0 != ret) {
         printf("ERROR: Invalid ELF file\n");
@@ -533,6 +535,9 @@ int load_images(
     }
 #endif /* ELFLOADER_CHECK_HASH */
 
+    /* Ensure the ELF blob is valid. Unfortunately, elf_checkFile() does not
+     * take a "size" parameter, so calling this is potentially dangerous.
+     */
     ret = elf_checkFile(kernel_elf_blob);
     if (ret != 0) {
         printf("ERROR: Kernel image not a valid ELF file\n");
@@ -629,7 +634,7 @@ int load_images(
         uint64_t min_vaddr, max_vaddr;
         ret = elf_getMemoryBounds(user_elf, 0, &min_vaddr, &max_vaddr);
         if (ret != 1) {
-            printf("ERROR: Could not get image bounds\n");
+            printf("ERROR: Could not get bounds for image #%d\n", i);
             return -1;
         }
         /* round up size to the end of the page next page */
@@ -682,7 +687,7 @@ int load_images(
                        &user_info[*num_images],
                        &next_phys_addr);
         if (0 != ret) {
-            printf("ERROR: Could not load user image ELF\n");
+            printf("ERROR: Could not load user image #%d ELF\n", i);
         }
 
         *num_images = i + 1;
