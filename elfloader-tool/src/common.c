@@ -353,7 +353,12 @@ static int load_elf(
          * is */
         memcpy((void *)dest_paddr, &phnum, 4);
         memcpy((void *)(dest_paddr + 4), &phsize, 4);
-        memcpy((void *)(dest_paddr + 8), (void *)source_paddr, phsize * phnum);
+        size_t elf_info_len = phsize * phnum;
+        if (elf_info_len > KEEP_HEADERS_SIZE) [
+            printf("ERROR: ELF header exceed one page, need %zu", elf_info_len);
+            return -1;
+        }
+        memcpy((void *)(dest_paddr + 8), (void *)source_paddr, elf_info_len);
         /* return the frame after our headers */
         dest_paddr += KEEP_HEADERS_SIZE;
     }
