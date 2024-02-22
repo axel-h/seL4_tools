@@ -400,6 +400,15 @@ int load_images(
     void const *cpio = _archive_start;
     size_t cpio_len = _archive_start_end - _archive_start;
 
+    // printf("integer types and sizes:\n");
+    // printf("  sizeof(void *)       is  %u\n", sizeof(void *));
+    // printf("  sizeof(size_t)       is  %u\n", sizeof(size_t));
+    // printf("  sizeof(uintptr_t)    is  %u\n", sizeof(uintptr_t));
+    // printf("  PRIu64               is  '%s'\n", PRIu64);
+    // printf("  PRIuPTR              is  '%s'\n", PRIuPTR);
+    // printf("  PRIuMAX              is  '%s'\n", PRIuMAX);
+    // printf("  sizeof(word_t)       is  %u\n", sizeof(word_t));
+
     printf("CPIO archive contents:\n");
     size_t cnt = 0;
     for (;;) {
