@@ -399,6 +399,19 @@ int load_images(
     void const *cpio = _archive_start;
     size_t cpio_len = _archive_start_end - _archive_start;
 
+    printf("CPIO archive contents:\n");
+    size_t cnt = 0;
+    for (;;) {
+        const char *name = 0;
+        unsigned long size = 0;
+        void const *blob = cpio_get_entry(cpio, cpio_len, cnt, &name, &size);
+        if (!blob) {
+            break;
+        }
+        printf("  %zu: %s (%ld byte)\n", cnt, name, size);
+        cnt++;
+    }
+
     /* Load kernel. */
     unsigned long cpio_file_size = 0;
     void const *kernel_elf_blob = cpio_get_file(cpio,
