@@ -589,7 +589,7 @@ int load_images(
 
     *num_images = 0;
     for (unsigned int i = 0; i < max_user_images; i++) {
-        printf("loading image %d/%d...\n", i);
+        printf("loading image %d...\n", i);
         /* Fetch info about the next ELF file in the archive. */
         unsigned long cpio_file_size = 0;
         void const *user_elf = cpio_get_entry(cpio,
