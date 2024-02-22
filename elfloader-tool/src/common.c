@@ -339,6 +339,7 @@ static int load_elf(
          * memcpy to a bunch of magic offsets. Explicit numbers for sizes
          * and offsets are used so that it is clear exactly what the layout
          * is */
+        printf("copying %d headers of size %d\n", phnum, phsize);
         memcpy((void *)dest_paddr, &phnum, 4);
         memcpy((void *)(dest_paddr + 4), &phsize, 4);
         memcpy((void *)(dest_paddr + 8), (void *)source_paddr, phsize * phnum);
@@ -588,6 +589,7 @@ int load_images(
 
     *num_images = 0;
     for (unsigned int i = 0; i < max_user_images; i++) {
+        printf("loading image %d/%d...\n", i);
         /* Fetch info about the next ELF file in the archive. */
         unsigned long cpio_file_size = 0;
         void const *user_elf = cpio_get_entry(cpio,
