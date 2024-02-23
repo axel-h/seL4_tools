@@ -69,8 +69,6 @@ void clear_bss(void)
     }
 }
 
-#define KEEP_HEADERS_SIZE BIT(PAGE_BITS)
-
 /*
  * Determine if two intervals overlap.
  */
@@ -339,7 +337,6 @@ static int unpack_elf_blob_to_paddr(
 static int load_elf(
     blob_t const *const elf_blob,
     paddr_t dest_paddr,
-    int keep_headers,
     struct image_info *info,
     paddr_t *next_phys_addr)
 {
@@ -415,36 +412,6 @@ static int load_elf(
 
     /* Round up the destination address to the next page */
     dest_paddr = ROUND_UP(dest_paddr + image_size, PAGE_BITS);
-
-    if (keep_headers) {
-        /* Provide the ELF headers in a page afterwards */
-        void const *elf = elf_blob->base;
-        uint32_t phnum = elf_getNumProgramHeaders(elf);
-        uint32_t phsize;
-        paddr_t source_paddr;
-        if (ISELF32(elf)) {
-            phsize = ((struct Elf32_Header const *)elf)->e_phentsize;
-            source_paddr = (paddr_t)elf32_getProgramHeaderTable(elf);
-        } else {
-            phsize = ((struct Elf64_Header const *)elf)->e_phentsize;
-            source_paddr = (paddr_t)elf64_getProgramHeaderTable(elf);
-        }
-        /* We have no way of sharing definitions with the kernel so we just
-         * memcpy to a bunch of magic offsets. Explicit numbers for sizes
-         * and offsets are used so that it is clear exactly what the layout
-         * is */
-        size_t elf_info_len = phsize * phnum;
-        memcpy((void *)dest_paddr, &phnum, 4);
-        memcpy((void *)(dest_paddr + 4), &phsize, 4);
-        size_t elf_info_len = phsize * phnum;
-        if (elf_info_len > KEEP_HEADERS_SIZE) [
-            printf("ERROR: ELF header exceed one page, need %zu", elf_info_len);
-            return -1;
-        }
-        memcpy((void *)(dest_paddr + 8), (void *)source_paddr, elf_info_len);
-        /* return the frame after our headers */
-        dest_paddr += KEEP_HEADERS_SIZE;
-    }
 
     if (next_phys_addr) {
         *next_phys_addr = dest_paddr;
@@ -662,7 +629,6 @@ int load_images(
     /* Load the kernel */
     ret = load_elf(&kernel_elf_blob,
                    kernel_bounds_phys.min,
-                   0, // don't keep ELF headers
                    kernel_info,
                    NULL); // we have calculated next_phys_addr already
 
@@ -729,7 +695,7 @@ int load_images(
         uint64_t max_vaddr = ROUND_UP(bounds_virt.max, PAGE_BITS);
         size_t image_size = max_vaddr - bounds_virt.min;
         /* one page is used for the kept headers */
-        total_user_image_size += image_size + KEEP_HEADERS_SIZE;
+        total_user_image_size += image_size + BIT(PAGE_BITS);
     }
 
     /* work out where to place the user image */
@@ -761,12 +727,37 @@ int load_images(
         /* Load the file into memory. */
         ret = load_elf(&user_blob,
                        next_phys_addr,
-                       1,  // keep ELF headers
                        &user_info[*num_images],
                        &next_phys_addr);
         if (0 != ret) {
             printf("ERROR: Could not load user image #%d ELF\n", i);
         }
+
+        /* Provide ELF header information in a page afterwards. */
+        void const *elf = user_blob.base;
+        uint32_t phnum = elf_getNumProgramHeaders(elf);
+        uint32_t phsize;
+        paddr_t source_paddr;
+        if (ISELF32(elf)) {
+            phsize = ((struct Elf32_Header const *)elf)->e_phentsize;
+            source_paddr = (paddr_t)elf32_getProgramHeaderTable(elf);
+        } else {
+            phsize = ((struct Elf64_Header const *)elf)->e_phentsize;
+            source_paddr = (paddr_t)elf64_getProgramHeaderTable(elf);
+        }
+        /* We have no way of sharing definitions with the kernel so we just
+         * memcpy to a bunch of magic offsets. Explicit numbers for sizes and
+         * offsets are used so that it is clear exactly what the layout is.
+         */
+        memcpy((void *)next_phys_addr, &phnum, 4);
+        memcpy((void *)(next_phys_addr + 4), &phsize, 4);
+        size_t elf_info_len = phsize * phnum;
+        if (elf_info_len > BIT(PAGE_BITS)) {
+            printf("ERROR: ELF header exceed one page, need %zu", elf_info_len);
+            return -1;
+        }
+        memcpy((void *)(next_phys_addr + 8), (void *)source_paddr, elf_info_len);
+        next_phys_addr += BIT(PAGE_BITS);
 
         *num_images = i + 1;
     }
