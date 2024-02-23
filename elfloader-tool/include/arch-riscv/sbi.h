@@ -64,6 +64,19 @@
 
 static inline void sbi_console_putchar(int ch)
 {
+
+#if defined(CONFIG_RISCV_SBI_BBL)
+
+    /* BBL implements a fully transparent output channel. It's usually leading
+     * to a UART, so we have to comply with the serial terminal rules like
+     * writing a '\r' (CR) before a '\n' (LF).
+     */
+    if ('\n' == ch) {
+        SBI_CALL_1(SBI_CONSOLE_PUTCHAR, '\r');
+    }
+
+#endif
+
     SBI_CALL_1(SBI_CONSOLE_PUTCHAR, ch);
 }
 

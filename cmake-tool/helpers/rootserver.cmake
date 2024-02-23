@@ -175,6 +175,51 @@ function(DeclareRootserver rootservername)
                 # the OpenSBI ELF (which contains the ElfLoader as payload)
                 set(elf_target_file "${OPENSBI_SYSTEM_IMAGE_ELF}")
 
+            elseif(KernelRiscvSBI_BBL)
+
+                # our final elf image becomes a BBL payload.
+                if("${KernelBblArch}" STREQUAL "")
+                    # usually "rv32imafdc" or "rv64imafdc"
+                    message(WARNING "missing KernelBblArch")
+                endif()
+
+                set(BBL_PATH "${CMAKE_SOURCE_DIR}/tools/riscv-pk" CACHE STRING "BBL location")
+                mark_as_advanced(FORCE BBL_PATH)
+
+                # The host string is extracted from the cross compiler setting
+                # minus the trailing '-'
+                if(NOT "${CROSS_COMPILER_PREFIX}" MATCHES "^(.*)-$")
+                    message(FATAL_ERROR "CROSS_COMPILER_PREFIX unsupported: '${CROSS_COMPILER_PREFIX}'")
+                endif()
+                get_filename_component(host ${CMAKE_MATCH_1} NAME)
+
+                set(BBL_BINARY_DIR "${CMAKE_BINARY_DIR}/bbl")
+                set(BBL_ELF "${BBL_BINARY_DIR}/bbl")
+
+                file(GLOB_RECURSE deps)
+
+                add_custom_command(
+                    OUTPUT "${BBL_ELF}"
+                    COMMAND
+                        mkdir -p "${BBL_BINARY_DIR}"
+                    COMMAND
+                        cd "${BBL_BINARY_DIR}" && ${BBL_PATH}/configure
+                        --quiet
+                        --host=${host}
+                        --with-arch=${KernelBblArch}
+                        --with-payload=${elf_target_file}
+                    COMMAND
+                        cd "${BBL_BINARY_DIR}" && make -s clean && make -s
+                    DEPENDS
+                        ${elf_target_file}
+                        elfloader
+                        ${USES_TERMINAL_DEBUG}
+                )
+
+                # overwrite elf_target_file, it's no longer the ElfLoader but
+                # the BBL ELF (which contains the ElfLoader as payload)
+                set(elf_target_file "${BBL_ELF}")
+
             else()
                 message(FATAL_ERROR "unknown RISC-V SBI, KernelRiscVSBI='${KernelRiscVSBI}'")
             endif()
