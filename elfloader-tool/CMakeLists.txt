@@ -154,6 +154,7 @@ add_compile_options(
     -Wall
     -Werror
     -Wextra
+    -Wshadow
 )
 
 if(KernelSel4ArchAarch32)
