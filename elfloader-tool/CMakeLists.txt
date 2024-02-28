@@ -105,7 +105,15 @@ config_option(
 
 add_config_library(elfloader "${configure_string}")
 
-add_compile_options(-D_XOPEN_SOURCE=700 -ffreestanding -Wall -Werror -W -Wextra)
+add_compile_options(
+    -D_XOPEN_SOURCE=700
+    -ffreestanding
+    -Wall
+    -Werror
+    -W
+    -Wextra
+)
+
 set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/arch-${KernelArch}/linker.lds")
 if(KernelArchRiscV)
     add_compile_options(-mcmodel=medany)
