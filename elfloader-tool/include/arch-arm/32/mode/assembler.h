@@ -7,8 +7,10 @@
 #pragma once
 
 /* This file contains useful macros for assembly code. */
+#ifndef __ASSEMBLER__
+#error "This header is for assembly code only"
+#endif
 
-#ifdef __ASSEMBLER__
 
 #define      SCTLR(reg)    p15, 0, reg, c1, c0, 0
 #define      CLIDR(reg)    p15, 1, reg, c0, c0, 1
@@ -41,8 +43,3 @@
                             | PMASK_IRQ          \
                             | PMASK_ASYNC_ABORT  \
                             | PMODE_SUPERVISOR   )
-
-#else /* !__ASSEMBLER__ */
-#warning "Including assembly-specific header in C code"
-#endif
-
