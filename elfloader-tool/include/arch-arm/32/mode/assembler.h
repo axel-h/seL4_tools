@@ -12,6 +12,7 @@
 #endif
 
 
+
 #define      SCTLR(reg)    p15, 0, reg, c1, c0, 0
 #define      CLIDR(reg)    p15, 1, reg, c0, c0, 1
 #define      TTBR0(reg)    p15, 0, reg, c2, c0, 0
