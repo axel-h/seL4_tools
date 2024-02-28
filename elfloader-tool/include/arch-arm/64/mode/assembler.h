@@ -7,8 +7,10 @@
 #pragma once
 
 /* This file contains useful macros for assembly code. */
+#ifndef __ASSEMBLER__
+#error "This header is for assembly code only"
+#endif
 
-#ifdef __ASSEMBLER__
 #include <mode/aarch64.h>
 
 .macro enable_mmu sctlr tmp
@@ -90,8 +92,3 @@ finished_\op:
     dsb     sy
     isb
 .endm
-
-#else /* !__ASSEMBLER__ */
-#warning "Including assembly-specific header in C code"
-#endif
-

@@ -6,7 +6,11 @@
 
 #pragma once
 
-#ifdef __ASSEMBLER__
+/* This file contains useful macros for assembly code. */
+#ifndef __ASSEMBLER__
+#error "This header is for assembly code only"
+#endif
+
 
 /*
  * Use BEGIN_FUNC(), END_FUNC() around assembly functions to annotate them
@@ -30,8 +34,3 @@ _name:
 
 #define END_FUNC_STATIC(_name) \
     .size _name, .-_name
-
-#else /* !__ASSEMBLER__ */
-#warning "Including assembly-specific header in C code"
-#endif
-
