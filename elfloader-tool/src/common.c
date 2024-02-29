@@ -181,7 +181,7 @@ static int load_elf(
     char const *elf_hash_filename,
     paddr_t dest_paddr,
     int keep_headers,
-    struct image_info *info,
+    image_info_t *info,
     paddr_t *next_phys_addr)
 {
     int ret;
