@@ -23,15 +23,15 @@ static volatile int non_boot_lock = 0;
 
 void arm_disable_dcaches(void);
 
-extern void const *dtb;
-extern uint32_t dtb_size;
-
 /* Entry point for all CPUs other than the initial. */
 void non_boot_main(void)
 {
 #ifndef CONFIG_ARCH_AARCH64
     arm_disable_dcaches();
 #endif
+
+    elfloader_ctx_t *ctx = &elfloader_ctx;
+
     /* Spin until the first CPU has finished initialisation. */
     while (!non_boot_lock) {
 #ifndef CONFIG_ARCH_AARCH64
@@ -58,10 +58,14 @@ void non_boot_main(void)
         arm_enable_mmu();
     }
 
-    /* Jump to the kernel. */
-    ((init_arm_kernel_t)kernel_info.virt_entry)(user_info.phys_region_start,
-                                                user_info.phys_region_end, user_info.phys_virt_offset,
-                                                user_info.virt_entry, (paddr_t)dtb, dtb_size);
+    struct image_info *user_img = &ctx->user[0];
+    ((init_arm_kernel_t)ctx->kernel.virt_entry)(
+        user_img->phys_region_start,
+        user_img->phys_region_end,
+        user_img->phys_virt_offset,
+        user_img->virt_entry,
+        (paddr_t)ctx->dtb.phys_base,
+        ctx->dtb.size);
 
     printf("AP Kernel returned back to the elf-loader.\n");
     abort();
