@@ -352,6 +352,109 @@ static int load_elf(
 }
 
 /*
+ * Load the DTB
+ */
+static int load_dtb(
+    void const *cpio,
+    size_t cpio_len,
+    paddr_t dtb_load_phys,
+    dtb_blob_t *dtb_blob)
+{
+    int ret;
+
+    void const *dtb = NULL;
+
+#ifdef CONFIG_ELFLOADER_INCLUDE_DTB
+
+    /* A DTB present in the CPIO archive takes preference over a DTB passed
+     * from the bootloder.
+     */
+
+    printf("Looking for DTB in CPIO archive...");
+    /* Note the lack of newline in the above printf(). Normally, fflush(stdout)
+     * must be called to ensure that the message shows up on a line-buffered
+     * stream,  which is the POSIX default on terminal devices). However, we are
+     * freestanding (on the "bare metal"), and use our own unbuffered printf()
+     * implementation.
+     */
+
+    unsigned long cpio_dtb_size = 0;
+    dtb = cpio_get_file(cpio, cpio_len, "kernel.dtb", &cpio_dtb_size);
+    if (!dtb) {
+        printf("not found.\n");
+    } else {
+        printf("found at %p.\n", dtb);
+        if (dtb_info) {
+            dtb_info->is_from_cpio = true;
+        }
+    }
+
+#endif /* CONFIG_ELFLOADER_INCLUDE_DTB */
+
+    /* If we don't have a DTB here, use the one a bootloader might have
+     * provided. Since 0 is a valid physical address, the size field is used to
+     * determin if the address is valid. A size of -1 indicates, that the actual
+     * size is not known - which is usually the case, because a bootloader often
+     * just passes an address.
+     */
+    if (!dtb) {
+        if (0 == dtb_info->size) {
+            /* Not having a DTB is not an error. With dtb_info->size still set
+             * to zero, the caller can find out that no DTB was loaded and then
+             * act accordingly.
+             */
+            printf("No DTB available\n");
+            dtb_info->phys_base = 0;
+            return 0;
+        }
+
+        printf("Loading DTB passed from bootloader at %p\n",
+               dtb_info->phys_base);
+
+        dtb = (void const *)(dtb_info->phys_base);
+    }
+
+    size_t dtb_size = fdt_size((void *)dtb);
+    if (0 == dtb_size) {
+        printf("ERROR: Invalid device tree blob supplied\n");
+        return -1;
+    }
+
+#ifdef CONFIG_ELFLOADER_INCLUDE_DTB
+
+    if (dtb_info->is_from_cpio && (dtb_size > cpio_dtb_size)) {
+        printf("ERROR: parsed device tree is larger (%zu byte) than CPIO file (%zu byte)\n",
+               dtb_size, cpio_dtb_size);
+        return -1;
+    }
+
+#endif /* CONFIG_ELFLOADER_INCLUDE_DTB */
+
+    /* Move the DTB out of the way. Check that the physical destination
+     * location is sane.
+     */
+    paddr_t dtb_phys_end = dtb_load_phys + dtb_size;
+    ret = ensure_phys_range_valid(dtb_load_phys, dtb_phys_end);
+    if (0 != ret) {
+        printf("ERROR: Physical target address of DTB is invalid\n");
+        return -1;
+    }
+
+    memmove((void *)dtb_load_phys, dtb, dtb_size);
+
+    printf("Loaded DTB from %p.\n", dtb);
+    printf("   paddr=[%p..%p]\n", dtb_load_phys, dtb_phys_end - 1);
+
+    /* Set DTB values for caller. */
+    if (dtb_blob) {
+        dtb_blob->phys_base = dtb_load_phys;
+        dtb_blob->size = dtb_size;
+    }
+
+    return 0;
+}
+
+/*
  * ELF-loader for ARM systems.
  *
  * We are currently running out of physical memory, with an ELF file for the
@@ -383,10 +486,7 @@ int load_images(elfloader_ctx_t *ctx)
 {
     int ret;
     uint64_t kernel_phys_start, kernel_phys_end;
-    uintptr_t dtb_phys_start, dtb_phys_end;
-    paddr_t next_phys_addr;
     const char *elf_filename;
-    int has_dtb_cpio = 0;
 
     void const *cpio = _archive_start;
     size_t cpio_len = _archive_start_end - _archive_start;
@@ -423,72 +523,23 @@ int load_images(elfloader_ctx_t *ctx)
         return -1;
     }
 
-    void const *dtb = NULL;
-
-#ifdef CONFIG_ELFLOADER_INCLUDE_DTB
-
-    printf("Looking for DTB in CPIO archive...");
-    /*
-     * Note the lack of newline in the above printf().  Normally one would
-     * have an fflush(stdout) here to ensure that the message shows up on a
-     * line-buffered stream (which is the POSIX default on terminal
-     * devices).  But we are freestanding (on the "bare metal"), and using
-     * our own unbuffered printf() implementation.
+    /* Load the DTB first, because this allows extracting further platform
+     * information from it, which may affect the system setup. The DTB is put
+     * after the kernel image, because this ensures it is in a place well
+     * aligned with our memory usage.
      */
-    dtb = cpio_get_file(cpio, cpio_len, "kernel.dtb", NULL);
-    if (dtb == NULL) {
-        printf("not found.\n");
-    } else {
-        has_dtb_cpio = 1;
-        printf("found at %p.\n", dtb);
+    paddr_t next_phys_addr = ROUND_UP(kernel_phys_end, PAGE_BITS);
+    ret = load_dtb(cpio, cpio_len, next_phys_addr, &(ctx->dtb));
+    if (ret != 0) {
+        printf("ERROR: Could not load DTB\n");
+        return -1;
     }
 
-#endif /* CONFIG_ELFLOADER_INCLUDE_DTB */
-
-    /* If we don't have a DTB at this point, use the one the bootloader might
-     * have provided. Since 0 is a valid physical address, the size field is
-     * used to determin if there is a DTB. A size of -1 indicates, that the
-     * actual size is not known. This is usually the case, because bootloaders
-     * often just passes an address.
+    /* It's not an error here if there is no DTB. Eventually, the system that
+     * we are loading has to decide if it can handle this.
      */
-    if (!dtb && (ctx->dtb.size > 0)) {
-        dtb = (void const *)ctx->dtb.phys_base;
-    }
-
-    /*
-     * Move the DTB out of the way, if it's present.
-     */
-    if (dtb) {
-        /* keep it page aligned */
-        next_phys_addr = dtb_phys_start = ROUND_UP(kernel_phys_end, PAGE_BITS);
-
-        size_t dtb_size = fdt_size(dtb);
-        if (0 == dtb_size) {
-            printf("ERROR: Invalid device tree blob supplied\n");
-            return -1;
-        }
-
-        /* Make sure this is a sane thing to do */
-        ret = ensure_phys_range_valid(next_phys_addr,
-                                      next_phys_addr + dtb_size);
-        if (0 != ret) {
-            printf("ERROR: Physical address of DTB invalid\n");
-            return -1;
-        }
-
-        memmove((void *)next_phys_addr, dtb, dtb_size);
-        next_phys_addr += dtb_size;
-        next_phys_addr = ROUND_UP(next_phys_addr, PAGE_BITS);
-        dtb_phys_end = next_phys_addr;
-
-        printf("Loaded DTB from %p.\n", dtb);
-        printf("   paddr=[%p..%p]\n", dtb_phys_start, dtb_phys_end - 1);
-        ctx->dtb.phys_base = dtb_phys_start;
-        ctx->dtb.size = dtb_size;
-    } else {
-        ctx->dtb.phys_base = 0;
-        ctx->dtb.size = 0;
-        next_phys_addr = ROUND_UP(kernel_phys_end, PAGE_BITS);
+    if (ctx->dtb.size > 0) {
+        next_phys_addr = ROUND_UP(next_phys_addr + ctx->dtb.size, PAGE_BITS);
     }
 
     /* Load the kernel */
@@ -526,10 +577,12 @@ int load_images(elfloader_ctx_t *ctx)
     cpio_get_entry(cpio, cpio_len, 1, &elf_filename, NULL);
     ret = strcmp(elf_filename, "kernel.dtb");
     if (0 != ret) {
-        if (has_dtb_cpio) {
+#ifdef CONFIG_ELFLOADER_INCLUDE_DTB
+        if (ctx->dtb.is_from_cpio) {
             printf("ERROR: Kernel DTB not second image in archive\n");
             return -1;
         }
+#endif
         user_elf_offset = 1;
     }
 
