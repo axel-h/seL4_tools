@@ -204,7 +204,7 @@ static int run_elfloader(UNUSED int hart_id, void *bootloader_dtb)
     }
 
     if (num_apps != 1) {
-        printf("ERROR: expected to load just 1 app, actually loaded %u apps\n",
+        printf("ERROR: expected to load exactly 1 app, actually loaded %u apps\n",
                num_apps);
         return -1;
     }
