@@ -108,11 +108,19 @@ add_config_library(elfloader "${configure_string}")
 add_compile_options(
     # support POSIX 7 (2018), see also https://pubs.opengroup.org/onlinepubs/9699919799
     -D_XOPEN_SOURCE=700
+    # A freestanding environmend does not use standard libs and convention. It
+    # implies -fno-builtin. For -Wformat only on explicitly annotated functions
+    # will be checked,
     -ffreestanding
-    -Wall
+    -Wall # includes -Wformat
     -Werror
     -Wextra
     -Wshadow
+    -Wnested-externs
+    -Wno-nonnull
+    -Wpointer-arith
+    -Wstrict-prototypes
+    -Wformat-nonliteral
 )
 set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/linker.lds")
 if(KernelArchRiscV)
