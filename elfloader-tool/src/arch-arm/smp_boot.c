@@ -69,8 +69,11 @@ void non_boot_main(void)
         user_img->phys_region_end,
         user_img->phys_virt_offset,
         user_img->virt_entry,
-        (paddr_t)ctx->dtb.phys_base,
-        ctx->dtb.size);
+        (word_t)ctx->dtb.phys_base,
+        /* The kernel is expecting a uint32 here. Usually DTBs are much less
+         * than 4 GiB, so a simple cast should be fine.
+         */
+        (uint32_t)ctx->dtb.size);
 
     printf("AP Kernel returned back to the elf-loader.\n");
     abort();

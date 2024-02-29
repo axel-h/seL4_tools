@@ -234,7 +234,10 @@ void continue_boot(int was_relocated)
         user_img->phys_virt_offset,
         user_img->virt_entry,
         (word_t)ctx->dtb.phys_base,
-        ctx->dtb.size);
+        /* The kernel is expecting a uint32 here. Usually DTBs are much less
+         * than 4 GiB, so a simple cast should be fine.
+         */
+        (uint32_t)ctx->dtb.size);
 
     /* We should never get here. */
     printf("ERROR: Kernel returned back to the ELF Loader\n");
