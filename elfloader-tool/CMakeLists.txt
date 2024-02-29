@@ -111,6 +111,7 @@ add_compile_options(
     -Wall
     -Werror
     -Wextra
+    -Wformat   # isn't this part of -Wall?
 )
 
 set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/arch-${KernelArch}/linker.lds")
