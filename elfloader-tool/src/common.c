@@ -379,14 +379,7 @@ static int load_elf(
  *
  *  We attempt to check for some of these, but some may go unnoticed.
  */
-int load_images(
-    struct image_info *kernel_info,
-    struct image_info *user_info,
-    unsigned int max_user_images,
-    unsigned int *num_images,
-    void const *bootloader_dtb,
-    void const **chosen_dtb,
-    size_t *chosen_dtb_size)
+int load_images(elfloader_ctx_t *ctx)
 {
     int ret;
     uint64_t kernel_phys_start, kernel_phys_end;
@@ -434,31 +427,32 @@ int load_images(
 
 #ifdef CONFIG_ELFLOADER_INCLUDE_DTB
 
-    if (chosen_dtb) {
-        printf("Looking for DTB in CPIO archive...");
-        /*
-         * Note the lack of newline in the above printf().  Normally one would
-         * have an fflush(stdout) here to ensure that the message shows up on a
-         * line-buffered stream (which is the POSIX default on terminal
-         * devices).  But we are freestanding (on the "bare metal"), and using
-         * our own unbuffered printf() implementation.
-         */
-        dtb = cpio_get_file(cpio, cpio_len, "kernel.dtb", NULL);
-        if (dtb == NULL) {
-            printf("not found.\n");
-        } else {
-            has_dtb_cpio = 1;
-            printf("found at %p.\n", dtb);
-        }
+    printf("Looking for DTB in CPIO archive...");
+    /*
+     * Note the lack of newline in the above printf().  Normally one would
+     * have an fflush(stdout) here to ensure that the message shows up on a
+     * line-buffered stream (which is the POSIX default on terminal
+     * devices).  But we are freestanding (on the "bare metal"), and using
+     * our own unbuffered printf() implementation.
+     */
+    dtb = cpio_get_file(cpio, cpio_len, "kernel.dtb", NULL);
+    if (dtb == NULL) {
+        printf("not found.\n");
+    } else {
+        has_dtb_cpio = 1;
+        printf("found at %p.\n", dtb);
     }
 
 #endif /* CONFIG_ELFLOADER_INCLUDE_DTB */
 
-    if (chosen_dtb && !dtb && bootloader_dtb) {
-        /* Use the bootloader's DTB if we are not using the DTB in the CPIO
-         * archive.
-         */
-        dtb = bootloader_dtb;
+    /* If we don't have a DTB at this point, use the one the bootloader might
+     * have provided. Since 0 is a valid physical address, the size field is
+     * used to determin if there is a DTB. A size of -1 indicates, that the
+     * actual size is not known. This is usually the case, because bootloaders
+     * often just passes an address.
+     */
+    if (!dtb && (ctx->dtb.size > 0)) {
+        dtb = (void const *)ctx->dtb.phys_base;
     }
 
     /*
@@ -489,9 +483,11 @@ int load_images(
 
         printf("Loaded DTB from %p.\n", dtb);
         printf("   paddr=[%p..%p]\n", dtb_phys_start, dtb_phys_end - 1);
-        *chosen_dtb = (void *)dtb_phys_start;
-        *chosen_dtb_size = dtb_size;
+        ctx->dtb.phys_base = dtb_phys_start;
+        ctx->dtb.size = dtb_size;
     } else {
+        ctx->dtb.phys_base = 0;
+        ctx->dtb.size = 0;
         next_phys_addr = ROUND_UP(kernel_phys_end, PAGE_BITS);
     }
 
@@ -504,7 +500,7 @@ int load_images(
                    "kernel.bin", // hash file
                    (paddr_t)kernel_phys_start,
                    0, // don't keep ELF headers
-                   kernel_info,
+                   &ctx->kernel,
                    NULL); // we have calculated next_phys_addr already
 
     if (0 != ret) {
@@ -536,6 +532,8 @@ int load_images(
         }
         user_elf_offset = 1;
     }
+
+    unsigned int max_user_images = ARRAY_SIZE(ctx->user);
 
 #ifdef CONFIG_ELFLOADER_ROOTSERVERS_LAST
 
@@ -572,7 +570,8 @@ int load_images(
 
 #endif /* CONFIG_ELFLOADER_ROOTSERVERS_LAST */
 
-    *num_images = 0;
+    ctx->loaded_user_images = 0;
+
     for (unsigned int i = 0; i < max_user_images; i++) {
         /* Fetch info about the next ELF file in the archive. */
         unsigned long cpio_file_size = 0;
@@ -599,13 +598,13 @@ int load_images(
                        "app.bin", // hash file
                        next_phys_addr,
                        1,  // keep ELF headers
-                       &user_info[i],
+                       &ctx->user[i],
                        &next_phys_addr);
         if (0 != ret) {
             printf("ERROR: Could not load user image ELF\n");
         }
 
-        *num_images = i + 1;
+        ctx->loaded_user_images = i + 1;
     }
 
     return 0;

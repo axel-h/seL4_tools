@@ -30,10 +30,7 @@ ALIGN(BIT(PAGE_BITS)) VISIBLE
 char core_stack_alloc[CONFIG_MAX_NUM_NODES][BIT(PAGE_BITS)];
 #endif
 
-struct image_info kernel_info;
-struct image_info user_info;
-void const *dtb;
-size_t dtb_size;
+elfloader_ctx_t elfloader_ctx;
 
 extern void finish_relocation(int offset, void *_dynamic, unsigned int total_offset);
 void continue_boot(int was_relocated);
@@ -43,7 +40,7 @@ void continue_boot(int was_relocated);
  * so that when we enable the MMU we can keep executing.
  */
 extern char _DYNAMIC[];
-void relocate_below_kernel(void)
+void relocate_below_kernel(elfloader_ctx_t *ctx)
 {
     /*
      * These are the ELF loader's physical addresses,
@@ -53,7 +50,7 @@ void relocate_below_kernel(void)
     uintptr_t UNUSED start = (uintptr_t)_text;
     uintptr_t end = (uintptr_t)_end;
 
-    if (end <= kernel_info.virt_region_start) {
+    if (end <= ctx->kernel.virt_region_start) {
         /*
          * If the ELF loader is already below the kernel,
          * skip relocation.
@@ -77,7 +74,7 @@ void relocate_below_kernel(void)
      * The strictes alignment requirement we have is the 64K-aligned AArch32
      * page tables, so we use that to calculate the new base of the elfloader.
      */
-    uintptr_t new_base = kernel_info.virt_region_start - (ROUND_UP(size, MAX_ALIGN_BITS));
+    uintptr_t new_base = ctx->kernel.virt_region_start - (ROUND_UP(size, MAX_ALIGN_BITS));
     uint32_t offset = start - new_base;
     printf("relocating from %p-%p to %p-%p... size=0x%x (padded size = 0x%x)\n", start, end, new_base, new_base + size,
            size, ROUND_UP(size, MAX_ALIGN_BITS));
@@ -101,7 +98,9 @@ void relocate_below_kernel(void)
  */
 void main(UNUSED void *arg)
 {
-    void *bootloader_dtb = NULL;
+    /* Ensure context is clean. */
+    elfloader_ctx_t *ctx = &elfloader_ctx;
+    memset(ctx, 0, sizeof(*ctx));
 
     /* initialize platform to a state where we can print to a UART */
     if (initialise_devices()) {
@@ -122,7 +121,8 @@ void main(UNUSED void *arg)
      * bootelf argc is NULL.
      */
     if (arg && (DTB_MAGIC == *(uint32_t *)arg)) {
-        bootloader_dtb = arg;
+        ctx->dtb.phys_base = (paddr_t)arg;
+        ctx->dtb.size = (size_t)(-1); /* unknown size */
     }
 
 #elif defined(CONFIG_IMAGE_EFI)
@@ -132,28 +132,31 @@ void main(UNUSED void *arg)
         abort();
     }
 
-    bootloader_dtb = efi_get_fdt();
+    /* For EFI, the DTB address is not supposed to be 0. */
+    void *efi_dtb = efi_get_fdt();
+    if (efi_dtb) {
+        ctx->dtb.phys_base = (paddr_t)efi_dtb;
+        ctx->dtb.size = (size_t)(-1); /* unknown size */
+    }
 
 #endif
 
-    if (bootloader_dtb) {
-        printf("  dtb=%p\n", bootloader_dtb);
+    if (0 != ctx->dtb.size) {
+        printf("  dtb=%p\n", ctx->dtb.phys_base);
     } else {
         printf("No DTB passed in from boot loader.\n");
     }
 
     /* Unpack ELF images into memory. */
-    unsigned int num_apps = 0;
-    int ret = load_images(&kernel_info, &user_info, 1, &num_apps,
-                          bootloader_dtb, &dtb, &dtb_size);
+    int ret = load_images(ctx);
     if (0 != ret) {
         printf("ERROR: image loading failed\n");
         abort();
     }
 
-    if (num_apps != 1) {
+    if (ctx->loaded_user_images != 1) {
         printf("ERROR: expected to load exactly 1 app, actually loaded %u apps\n",
-               num_apps);
+               ctx->loaded_user_images);
         abort();
     }
     /*
@@ -163,7 +166,7 @@ void main(UNUSED void *arg)
      * once we switch to the boot page tables.
      * Make sure this is not the case.
      */
-    relocate_below_kernel();
+    relocate_below_kernel(ctx);
     printf("ERROR: Relocation failed, aborting!\n");
     abort();
 }
@@ -185,6 +188,8 @@ void continue_boot(int was_relocated)
         }
     }
 
+    elfloader_ctx_t *ctx = &elfloader_ctx;
+
 #if (defined(CONFIG_ARCH_ARM_V7A) || defined(CONFIG_ARCH_ARM_V8A)) && !defined(CONFIG_ARM_HYPERVISOR_SUPPORT)
     if (is_hyp_mode()) {
         extern void leave_hyp(void);
@@ -197,11 +202,11 @@ void continue_boot(int was_relocated)
         extern void disable_caches_hyp();
         disable_caches_hyp();
 #endif
-        init_hyp_boot_vspace(&kernel_info);
+        init_hyp_boot_vspace(&ctx->kernel);
     } else {
         /* If we are not in HYP mode, we enable the SV MMU and paging
          * just in case the kernel does not support hyp mode. */
-        init_boot_vspace(&kernel_info);
+        init_boot_vspace(&ctx->kernel);
     }
 
 #if CONFIG_MAX_NUM_NODES > 1
@@ -217,16 +222,19 @@ void continue_boot(int was_relocated)
     }
 
     /* Enter kernel. The UART may no longer be accessible here. */
-    if ((uintptr_t)uart_get_mmio() < kernel_info.virt_region_start) {
+    if ((uintptr_t)uart_get_mmio() < ctx->kernel.virt_region_start) {
         printf("Jumping to kernel-image entry point...\n\n");
     }
 
-    ((init_arm_kernel_t)kernel_info.virt_entry)(user_info.phys_region_start,
-                                                user_info.phys_region_end,
-                                                user_info.phys_virt_offset,
-                                                user_info.virt_entry,
-                                                (word_t)dtb,
-                                                dtb_size);
+    /* The primary hard uses the first user image. */
+    struct image_info *user_img = &ctx->user[0];
+    ((init_arm_kernel_t)ctx->kernel.virt_entry)(
+        user_img->phys_region_start,
+        user_img->phys_region_end,
+        user_img->phys_virt_offset,
+        user_img->virt_entry,
+        (word_t)ctx->dtb.phys_base,
+        ctx->dtb.size);
 
     /* We should never get here. */
     printf("ERROR: Kernel returned back to the ELF Loader\n");
