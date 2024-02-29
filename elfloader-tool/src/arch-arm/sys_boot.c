@@ -152,7 +152,7 @@ void main(UNUSED void *arg)
     }
 
     if (num_apps != 1) {
-        printf("ERROR: expected to load just 1 app, actually loaded %u apps\n",
+        printf("ERROR: expected to load exactly 1 app, actually loaded %u apps\n",
                num_apps);
         abort();
     }
