@@ -288,7 +288,7 @@ void secondary_entry(int hart_id, int core_id)
         user_img->phys_virt_offset,
         user_img->virt_entry,
         (word_t)ctx->dtb.phys_base,
-        ctx->dtb.size,
+        (word_t)ctx->dtb.size,
         hart_id,
         core_id);
 }
