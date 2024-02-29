@@ -173,19 +173,17 @@ void main(UNUSED void *arg)
 
 void continue_boot(int was_relocated)
 {
-    if (was_relocated) {
-        printf("ELF loader relocated, continuing boot...\n");
-    }
-
     /*
-     * If we were relocated, we need to re-initialise the
-     * driver model so all its pointers are set up properly.
+     * If we were relocated, we need to re-initialise the driver model so all
+     * its pointers are set up properly.
      */
     if (was_relocated) {
         if (0 != initialise_devices()) {
+            /* This might not be printed */
             printf("ERROR: Did not successfully return from initialise_devices()\n");
             abort();
         }
+        printf("ELF loader relocated, continuing boot...\n");
     }
 
     elfloader_ctx_t *ctx = &elfloader_ctx;
