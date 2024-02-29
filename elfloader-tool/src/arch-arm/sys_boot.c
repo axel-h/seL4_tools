@@ -227,7 +227,7 @@ void continue_boot(int was_relocated)
     }
 
     /* The primary hard uses the first user image. */
-    struct image_info *user_img = &ctx->user[0];
+    image_info_t *user_img = &ctx->user[0];
     ((init_arm_kernel_t)ctx->kernel.virt_entry)(
         user_img->phys_region_start,
         user_img->phys_region_end,
