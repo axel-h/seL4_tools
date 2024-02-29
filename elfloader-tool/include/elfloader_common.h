@@ -45,7 +45,7 @@ typedef struct {
 /*
  * Information about an image we are loading.
  */
-struct image_info {
+typedef struct {
     /* Start/end byte of the image in physical memory. */
     paddr_t phys_region_start;
     paddr_t phys_region_end;
@@ -80,17 +80,17 @@ struct image_info {
      * operation is completely undefined by C rules.
      */
     word_t phys_virt_offset;
-};
+} image_info_t;
 
 
 typedef struct {
     dtb_blob_t dtb;
-    struct image_info kernel;
+    image_info_t kernel;
     /* For now, we just support loading one user image. Loading multiple image
      * is supported, but this feature seems experimental and may not work in
      * all cases.
      */
-    struct image_info user[1];
+    image_info_t user[1];
     unsigned int loaded_user_images;
 } elfloader_ctx_t;
 

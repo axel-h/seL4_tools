@@ -81,7 +81,7 @@ void NORETURN abort(void)
     UNREACHABLE();
 }
 
-static int map_kernel_window(struct image_info *kernel_info)
+static int map_kernel_window(image_info_t *kernel_info)
 {
     uint32_t index;
     unsigned long *lpt;
@@ -236,7 +236,7 @@ static int run_elfloader(elfloader_ctx_t *ctx, UNUSED int hart_id)
     enable_virtual_memory();
 
     printf("Jumping to kernel-image entry point...\n\n");
-    struct image_info *user_img = &ctx->user[0];
+    image_info_t *user_img = &ctx->user[0];
     ((init_riscv_kernel_t)ctx->kernel.virt_entry)(
         user_img->phys_region_start,
         user_img->phys_region_end,
@@ -271,7 +271,7 @@ void secondary_entry(int hart_id, int core_id)
     enable_virtual_memory();
 
     elfloader_ctx_t *ctx = &elfloader_ctx;
-    struct image_info *user_img = &ctx->user[0];
+    image_info_t *user_img = &ctx->user[0];
     /* If adding or modifying these parameters you will need to update
      * the registers in head.S
      */

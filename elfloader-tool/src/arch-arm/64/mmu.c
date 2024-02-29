@@ -17,7 +17,7 @@
 * the kernel's first vaddr, and a virtual-to-physical mapping above the
 * kernel's first vaddr.
 */
-void init_boot_vspace(struct image_info *kernel_info)
+void init_boot_vspace(image_info_t *kernel_info)
 {
     word_t i;
 
@@ -57,7 +57,7 @@ void init_boot_vspace(struct image_info *kernel_info)
     }
 }
 
-void init_hyp_boot_vspace(struct image_info *kernel_info)
+void init_hyp_boot_vspace(image_info_t *kernel_info)
 {
     word_t i;
     word_t pmd_index;

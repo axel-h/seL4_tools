@@ -28,8 +28,8 @@ extern void arm_enable_hyp_mmu(void);
 
 
 /* Setup boot VSpace. */
-void init_boot_vspace(struct image_info *kernel_info);
-void init_hyp_boot_vspace(struct image_info *kernel_info);
+void init_boot_vspace(image_info_t *kernel_info);
+void init_hyp_boot_vspace(image_info_t *kernel_info);
 
 /* Assembly functions. */
 extern void flush_dcache(void);
