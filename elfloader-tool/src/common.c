@@ -112,7 +112,7 @@ static int unpack_elf_to_paddr(
     /* Check that image virtual address range is sane */
     if ((u64_min_vaddr > UINTPTR_MAX) || (u64_max_vaddr > UINTPTR_MAX)) {
         printf("ERROR: image virtual address [%"PRIx64"..%"PRIx64"] exceeds "
-               "UINTPTR_MAX (%u)\n",
+               "UINTPTR_MAX (%"PRIxMAX")\n",
                u64_min_vaddr, u64_max_vaddr, UINTPTR_MAX);
         return -1;
     }
@@ -188,7 +188,7 @@ static int load_elf(
     uint64_t min_vaddr, max_vaddr;
 
     /* Print diagnostics. */
-    printf("ELF-loading image '%s' to %p\n", name, dest_paddr);
+    printf("ELF-loading image '%s' to %"PRIxPTR"\n", name, dest_paddr);
 
     /* Get the memory bounds. Unlike most other functions, this returns 1 on
      * success and anything else is an error.
@@ -280,9 +280,9 @@ static int load_elf(
 #endif  /* CONFIG_HASH_NONE */
 
     /* Print diagnostics. */
-    printf("  paddr=[%p..%p]\n", dest_paddr, dest_paddr + image_size - 1);
-    printf("  vaddr=[%p..%p]\n", (vaddr_t)min_vaddr, (vaddr_t)max_vaddr - 1);
-    printf("  virt_entry=%p\n", (vaddr_t)elf_getEntryPoint(elf_blob));
+    printf("  paddr=[%"PRIxPTR"..%"PRIxPTR"]\n", dest_paddr, dest_paddr + image_size - 1);
+    printf("  vaddr=[%"PRIxPTR"..%"PRIxPTR"]\n", (vaddr_t)min_vaddr, (vaddr_t)max_vaddr - 1);
+    printf("  virt_entry=%"PRIxPTR"\n", (vaddr_t)elf_getEntryPoint(elf_blob));
 
     /* Ensure the ELF file is valid. */
     ret = elf_checkFile(elf_blob);
@@ -307,7 +307,7 @@ static int load_elf(
     /* Copy the data. */
     ret = unpack_elf_to_paddr(elf_blob, dest_paddr);
     if (0 != ret) {
-        printf("ERROR: Unpacking ELF to %p failed\n", dest_paddr);
+        printf("ERROR: Unpacking ELF to %"PRIxPTR" failed\n", dest_paddr);
         return -1;
     }
 
@@ -488,7 +488,7 @@ int load_images(
         dtb_phys_end = next_phys_addr;
 
         printf("Loaded DTB from %p.\n", dtb);
-        printf("   paddr=[%p..%p]\n", dtb_phys_start, dtb_phys_end - 1);
+        printf("   paddr=[%"PRIxPTR"..%"PRIxPTR"]\n", dtb_phys_start, dtb_phys_end - 1);
         *chosen_dtb = (void *)dtb_phys_start;
         *chosen_dtb_size = dtb_size;
     } else {
