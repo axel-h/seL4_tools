@@ -111,7 +111,7 @@ static int unpack_elf_to_paddr(
 
     /* Check that image virtual address range is sane */
     if ((u64_min_vaddr > UINTPTR_MAX) || (u64_max_vaddr > UINTPTR_MAX)) {
-        printf("ERROR: image virtual address [%"PRIu64"..%"PRIu64"] exceeds "
+        printf("ERROR: image virtual address [%"PRIx64"..%"PRIx64"] exceeds "
                "UINTPTR_MAX (%u)\n",
                u64_min_vaddr, u64_max_vaddr, UINTPTR_MAX);
         return -1;
