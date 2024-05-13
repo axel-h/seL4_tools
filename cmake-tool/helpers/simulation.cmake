@@ -163,6 +163,19 @@ function(GenerateSimulateScript)
         set(sim_cpu "rv${KernelWordSize}")
         SetDefaultMemSize("${QEMU_MEMORY}")
         set(qemu_sim_extra_args "-bios none")
+    elseif(KernelPlatformHobgoblin)
+        set(binary "qemu-system-riscv64")
+        set(sim_machine "hobgoblin")
+        set(sim_graphic_opt "-nographic")
+        set(sim_machine "hobgoblin")
+        set(qemu_sim_extra_args "-bios none")
+        #set(sim_machine "hobgoblin,boot-from-rom=true")
+        #set(qemu_sim_extra_args "-bios resources/fsbl_rom.xexe")
+        #-drive file="sd-card-4mib-dummy.img",format=raw,if=sd
+        #-bios "resources/opensbi-riscv64-generic-fw_dynamic.bin"
+        #-bios "resources/rustsbi-qemu-virt-v0.1.1-debug.bin"
+        #-kernel "build-sel4-hobgoblin-20240214-210454/kernel.elf"
+        #-dtb "resources/a70x-hobgoblin.dtb"
     else()
         set(error "Unsupported platform or architecture for simulation")
     endif()
