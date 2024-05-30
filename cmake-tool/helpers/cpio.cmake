@@ -36,11 +36,11 @@ endfunction()
 # into another target
 function(MakeCPIO output_name input_files)
     cmake_parse_arguments(PARSE_ARGV 2 MAKE_CPIO "" "CPIO_SYMBOL" "DEPENDS")
-    if(NOT "${MAKE_CPIO_UNPARSED_ARGUMENTS}" STREQUAL "")
+    if(MAKE_CPIO_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR "Unknown arguments to MakeCPIO")
     endif()
     set(archive_symbol "_cpio_archive")
-    if(NOT "${MAKE_CPIO_CPIO_SYMBOL}" STREQUAL "")
+    if(MAKE_CPIO_CPIO_SYMBOL)
         set(archive_symbol ${MAKE_CPIO_CPIO_SYMBOL})
     endif()
     # Check that the reproducible flag is available. Don't use it if it isn't.
