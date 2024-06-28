@@ -23,8 +23,7 @@ static volatile int non_boot_lock = 0;
 
 void arm_disable_dcaches(void);
 
-extern void const *dtb;
-extern uint32_t dtb_size;
+extern dtb_info_t dtb_info;
 
 /* Entry point for all CPUs other than the initial. */
 void non_boot_main(void)
@@ -61,7 +60,8 @@ void non_boot_main(void)
     /* Jump to the kernel. */
     ((init_arm_kernel_t)kernel_info.virt_entry)(user_info.phys_region_start,
                                                 user_info.phys_region_end, user_info.phys_virt_offset,
-                                                user_info.virt_entry, (paddr_t)dtb, dtb_size);
+                                                user_info.virt_entry,
+                                                (word_t)dtb_info.phys_base, dtb_info.size);
 
     printf("AP Kernel returned back to the elf-loader.\n");
     abort();
