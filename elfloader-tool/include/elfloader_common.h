@@ -35,6 +35,14 @@ typedef uintptr_t vaddr_t;
 #define NULL                ((void *)0)
 
 /*
+ * Information about a DTB we are loading.
+ */
+typedef struct {
+    paddr_t phys_base;
+    size_t size;
+} dtb_blob_t;
+
+/*
  * Information about an image we are loading.
  */
 struct image_info {
@@ -74,9 +82,17 @@ struct image_info {
     word_t phys_virt_offset;
 };
 
-extern struct image_info kernel_info;
-extern struct image_info user_info;
-extern void const *dtb;
+
+typedef struct {
+    dtb_blob_t dtb;
+    struct image_info kernel;
+    /* For now, we just support loading one user image. Loading multiple image
+     * is supported, but this feature seems experimental and may not work in
+     * all cases.
+     */
+    struct image_info user[1];
+    unsigned int loaded_user_images;
+} elfloader_ctx_t;
 
 /* Symbols defined in linker scripts. */
 extern char _text[];
@@ -88,14 +104,7 @@ extern char _archive_start_end[];
 void clear_bss(void);
 
 /* Load images. */
-int load_images(
-    struct image_info *kernel_info,
-    struct image_info *user_info,
-    unsigned int max_user_images,
-    unsigned int *num_images,
-    void const *bootloader_dtb,
-    void const **chosen_dtb,
-    size_t *chosen_dtb_size);
+int load_images(elfloader_ctx_t *ctx);
 
 /* Platform functions */
 void platform_init(void);
