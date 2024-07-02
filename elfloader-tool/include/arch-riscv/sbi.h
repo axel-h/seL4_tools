@@ -1,9 +1,18 @@
 /*
  * Copyright 2020, Data61, CSIRO (ABN 41 687 119 230)
+ * Copyright 2021, HENSOLDT Cyber
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
+
 #pragma once
+
+#include <autoconf.h>
+#include <elfloader/gen_config.h>
+
+#if defined(RISCV_SBI_NONE)
+    /* If there is no SBI, the there is nothing here. */
+#else
 
 #include <elfloader_common.h>
 #include <types.h>
@@ -117,3 +126,5 @@ static inline void sbi_hart_start(const unsigned long hart_id,
 {
     SBI_HSM_CALL(SBI_HSM_HART_START, hart_id, start, privilege);
 }
+
+#endif /* [not] defined(RISCV_SBI_NONE) */
