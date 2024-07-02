@@ -159,6 +159,7 @@ function(DeclareRootserver rootservername)
                         PLATFORM_RISCV_XLEN=${OPENSBI_PLAT_XLEN}
                         PLATFORM_RISCV_ISA=${OPENSBI_PLAT_ISA}
                         PLATFORM_RISCV_ABI=${OPENSBI_PLAT_ABI} FW_PAYLOAD_PATH="${OPENSBI_PLAYLOAD}"
+                        FW_PAYLOAD_OFFSET=0x04000000
                     DEPENDS "${elf_target_file}" elfloader ${USES_TERMINAL_DEBUG}
                 )
                 # overwrite elf_target_file, it's no longer the ElfLoader but
