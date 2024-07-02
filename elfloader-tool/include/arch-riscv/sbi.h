@@ -3,7 +3,15 @@
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
+
 #pragma once
+
+#include <autoconf.h>
+#include <elfloader/gen_config.h>
+
+#if defined(RISCV_SBI_NONE)
+    /* If there is no SBI, the there is nothing here. */
+#else
 
 #include <elfloader_common.h>
 #include <types.h>
@@ -56,9 +64,6 @@
 
 static inline void sbi_console_putchar(int ch)
 {
-    /* OpenSBI implements a generic console, it hides any UART specific details
-     * like writing a '\r' (CR) before a '\n' (LF).
-     */
     SBI_CALL_1(SBI_CONSOLE_PUTCHAR, ch);
 }
 
@@ -117,3 +122,5 @@ static inline void sbi_hart_start(const unsigned long hart_id,
 {
     SBI_HSM_CALL(SBI_HSM_HART_START, hart_id, start, privilege);
 }
+
+#endif /* [not] defined(RISCV_SBI_NONE) */

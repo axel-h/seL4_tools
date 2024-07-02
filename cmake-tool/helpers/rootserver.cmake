@@ -32,7 +32,7 @@ mark_as_advanced(UIMAGE_TOOL)
 include(CMakeDependentOption)
 cmake_dependent_option(UseRiscVOpenSBI "Use OpenSBI." ON "KernelArchRiscV" OFF)
 
-if(UseRiscVOpenSBI)
+if(KernelRiscvSBI_OpenSBI)
     set(OPENSBI_PATH "${CMAKE_SOURCE_DIR}/tools/opensbi" CACHE STRING "OpenSBI Folder location")
     mark_as_advanced(FORCE OPENSBI_PATH)
 endif()
@@ -91,8 +91,17 @@ function(DeclareRootserver rootservername)
             "${CMAKE_BINARY_DIR}/images/${rootservername}-image-${KernelArch}-${KernelPlatform}"
         )
         set(elf_target_file $<TARGET_FILE:elfloader>)
+
         if(KernelArchRiscV)
-            if(UseRiscVOpenSBI)
+
+            if(KernelRiscvSBI_None)
+                # don't use SBI
+
+            elseif(KernelRiscvSBI_ROM)
+                # SBI already available on platform (e.g.in ROM)
+                message(NOTICE "SBI already available in ROM")
+
+            elseif(KernelRiscvSBI_OpenSBI)
                 # When using OpenSBI, the whole system image (usually consisting
                 # of the ELF-Loader, a device tree, the kernel, and a userland)
                 # is packaged as an OpenSBI payload.
@@ -165,8 +174,12 @@ function(DeclareRootserver rootservername)
                 # overwrite elf_target_file, it's no longer the ElfLoader but
                 # the OpenSBI ELF (which contains the ElfLoader as payload)
                 set(elf_target_file "${OPENSBI_SYSTEM_IMAGE_ELF}")
+
+            else()
+                message(FATAL_ERROR "unknown RISC-V SBI, KernelRiscVSBI='${KernelRiscVSBI}'")
             endif()
-        endif()
+
+        endif() # KernelArchRiscV
 
         if(NOT ElfloaderImage)
             # Seems the Elfloader CMake project was not included?
