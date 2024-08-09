@@ -105,7 +105,48 @@ config_option(
 
 add_config_library(elfloader "${configure_string}")
 
-add_compile_options(-D_XOPEN_SOURCE=700 -ffreestanding -Wall -Werror -W -Wextra)
+add_compile_options(
+    -D_XOPEN_SOURCE=700
+    # A freestanding environmend does not use standard libs and convention. It
+    # implies -fno-builtin. For -Wformat only on explicitly annotated functions
+    # will be checked,
+    -ffreestanding
+    -Wall # includes -Wformat
+    -Werror
+    -Wextra
+    -Wnested-externs
+    -Wno-nonnull
+    -Wpointer-arith
+    -Wstrict-prototypes
+    -Wformat-nonliteral
+    # -Wmissing-declarations
+    # -Wundef
+    #
+    #-Wmissing-prototypes
+    #    elfloader-tool/src/arch-arm/64/debug.c:
+    #       17 | void invalid_vector_entry(void)
+    #       23 | void el1_sync(void)
+    #
+    #-Wshadow
+    #    elfloader-tool/include/elfloader_common.h
+    #       86 | extern struct image_info kernel_info;
+    #    elfloader-tool/src/arch-arm/64/mmu.c:
+    #       86 | extern struct image_info kernel_info;
+    #    elfloader-tool/src/arch-arm/64/mmu.c:
+    #       22 | void init_boot_vspace(struct image_info *kernel_info)
+    #    seL4/elfloader-tool/src/arch-arm/64/mmu.c:
+    #       62 | void init_hyp_boot_vspace(struct image_info *kernel_info)
+    #
+    #-Wconversion
+    #    elfloader-tool/src/arch-arm/64/mmu.c:46:22:
+    #       error: unsigned conversion from ‘int’ to ‘vaddr_t’ {aka ‘long unsigned int’} changes value from ‘-1073741824’ to ‘18446744072635809792’ [-Werror=sign-conversion]
+    #       46 |     if ((first_vaddr & ~MASK(ARM_1GB_BLOCK_BITS)) != (last_vaddr & ~MASK(ARM_1GB_BLOCK_BITS))) {
+    #    elfloader-tool/src/arch-arm/64/mmu.c:46:66:
+    #       error: unsigned conversion from ‘int’ to ‘vaddr_t’ {aka ‘long unsigned int’} changes value from ‘-1073741824’ to ‘18446744072635809792’ [-Werror=sign-conversion]
+    #       46 |     if ((first_vaddr & ~MASK(ARM_1GB_BLOCK_BITS)) != (last_vaddr & ~MASK(ARM_1GB_BLOCK_BITS))) {
+    #
+)
+
 set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/arch-${KernelArch}/linker.lds")
 if(KernelArchRiscV)
     add_compile_options(-mcmodel=medany)
