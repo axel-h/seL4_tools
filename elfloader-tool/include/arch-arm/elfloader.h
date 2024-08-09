@@ -19,6 +19,8 @@ typedef void (*init_arm_kernel_t)(word_t ui_p_reg_start,
                                   word_t dtb,
                                   word_t dtb_size);
 
+/* This is defined by sys_boot.c and read in smp_boot.c */
+extern elfloader_ctx_t elfloader_ctx;
 
 /* Enable the mmu. */
 extern void arm_enable_mmu(void);
