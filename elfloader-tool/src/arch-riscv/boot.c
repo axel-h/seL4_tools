@@ -57,11 +57,44 @@ unsigned long l2pt[PTES_PER_PT] __attribute__((aligned(4096)));
 unsigned long l2pt_elf[PTES_PER_PT] __attribute__((aligned(4096)));
 #endif
 
-char elfloader_stack_alloc[BIT(CONFIG_KERNEL_STACK_BITS)];
+/* Stacks for each core are set up in the assembly startup code. */
+char elfloader_stack[CONFIG_MAX_NUM_NODES * BIT(CONFIG_KERNEL_STACK_BITS)] __attribute__((aligned(4096)));
 
 /* first HART will initialise these */
 void const *dtb = NULL;
 size_t dtb_size = 0;
+
+static inline void sfence_vma(void)
+{
+    asm volatile("sfence.vma" ::: "memory");
+}
+
+static inline void ifence(void)
+{
+    asm volatile("fence.i" ::: "memory");
+}
+
+#if CONFIG_PT_LEVELS == 2
+uint64_t vm_mode = 0x1llu << 31;
+#elif CONFIG_PT_LEVELS == 3
+uint64_t vm_mode = 0x8llu << 60;
+#elif CONFIG_PT_LEVELS == 4
+uint64_t vm_mode = 0x9llu << 60;
+#else
+#error "Wrong PT level"
+#endif
+
+static inline void enable_virtual_memory(void)
+{
+    sfence_vma();
+    asm volatile(
+        "csrw satp, %0\n"
+        :
+        : "r"(vm_mode | (uintptr_t)l1pt >> RISCV_PGSHIFT)
+        :
+    );
+    ifence();
+}
 
 /*
  * overwrite the default implementation for abort()
@@ -133,64 +166,70 @@ static int map_kernel_window(struct image_info *kernel_info)
     return 0;
 }
 
-#if CONFIG_PT_LEVELS == 2
-uint64_t vm_mode = 0x1llu << 31;
-#elif CONFIG_PT_LEVELS == 3
-uint64_t vm_mode = 0x8llu << 60;
-#elif CONFIG_PT_LEVELS == 4
-uint64_t vm_mode = 0x9llu << 60;
-#else
-#error "Wrong PT level"
-#endif
-
-int hsm_exists = 0;
+int hsm_exists = 0; /* assembly startup code will initialise this */
 
 #if CONFIG_MAX_NUM_NODES > 1
 
-extern void secondary_harts(unsigned long);
+extern void secondary_harts(word_t hart_id, word_t core_id);
 
 int secondary_go = 0;
-int next_logical_core_id = 1;
+int next_logical_core_id = 1; /* incremented by assembly code  */
 int mutex = 0;
 int core_ready[CONFIG_MAX_NUM_NODES] = { 0 };
-static void set_and_wait_for_ready(int hart_id, int core_id)
-{
-    /* Acquire lock to update core ready array */
-    while (__atomic_exchange_n(&mutex, 1, __ATOMIC_ACQUIRE) != 0);
-    printf("Hart ID %d core ID %d\n", hart_id, core_id);
-    core_ready[core_id] = 1;
-    __atomic_store_n(&mutex, 0, __ATOMIC_RELEASE);
 
-    /* Wait untill all cores are go */
-    for (int i = 0; i < CONFIG_MAX_NUM_NODES; i++) {
-        while (__atomic_load_n(&core_ready[i], __ATOMIC_RELAXED) == 0) ;
+#endif /* CONFIG_MAX_NUM_NODES > 1 */
+
+static void acquire_multicore_lock(void)
+{
+#if CONFIG_MAX_NUM_NODES > 1
+    while (__atomic_exchange_n(&mutex, 1, __ATOMIC_ACQUIRE) != 0) {
+        /* busy waiting loop */
     }
+#endif /* CONFIG_MAX_NUM_NODES > 1 */
 }
+
+static void release_multicore_lock(void)
+{
+#if CONFIG_MAX_NUM_NODES > 1
+    __atomic_store_n(&mutex, 0, __ATOMIC_RELEASE);
+#endif /* CONFIG_MAX_NUM_NODES > 1 */
+}
+
+#if CONFIG_MAX_NUM_NODES > 1
+static void set_secondary_cores_go(void)
+{
+    __atomic_store_n(&secondary_go, 1, __ATOMIC_RELEASE);
+}
+#endif /* CONFIG_MAX_NUM_NODES > 1 */
+
+static void block_until_secondary_cores_go(void)
+{
+#if CONFIG_MAX_NUM_NODES > 1
+    while (__atomic_load_n(&secondary_go, __ATOMIC_ACQUIRE) == 0) {
+        /* busy waiting loop */
+    }
+#endif /* CONFIG_MAX_NUM_NODES > 1 */
+}
+
+static void mark_core_ready(int core_id)
+{
+#if CONFIG_MAX_NUM_NODES > 1
+    core_ready[core_id] = 1;
+#else
+    UNUSED_VARIABLE(core_id);
 #endif
-
-static inline void sfence_vma(void)
-{
-    asm volatile("sfence.vma" ::: "memory");
 }
 
-static inline void ifence(void)
+static int is_core_ready(int core_id)
 {
-    asm volatile("fence.i" ::: "memory");
+#if CONFIG_MAX_NUM_NODES > 1
+    return (0 != __atomic_load_n(&core_ready[core_id], __ATOMIC_RELAXED));
+#else
+    return (0 == core_id); /* dummy, always ready */
+#endif
 }
 
-static inline void enable_virtual_memory(void)
-{
-    sfence_vma();
-    asm volatile(
-        "csrw satp, %0\n"
-        :
-        : "r"(vm_mode | (uintptr_t)l1pt >> RISCV_PGSHIFT)
-        :
-    );
-    ifence();
-}
-
-static int run_elfloader(UNUSED int hart_id, void *bootloader_dtb)
+static int run_elfloader(void *bootloader_dtb)
 {
     int ret;
 
@@ -215,90 +254,80 @@ static int run_elfloader(UNUSED int hart_id, void *bootloader_dtb)
         return -1;
     }
 
-#if CONFIG_MAX_NUM_NODES > 1
-    while (__atomic_exchange_n(&mutex, 1, __ATOMIC_ACQUIRE) != 0);
-    printf("Main entry hart_id:%d\n", hart_id);
-    __atomic_store_n(&mutex, 0, __ATOMIC_RELEASE);
+    return 0;
+}
 
-    /* Unleash secondary cores */
-    __atomic_store_n(&secondary_go, 1, __ATOMIC_RELEASE);
+NORETURN void secondary_hart_main(word_t hart_id, word_t core_id)
+{
+    if (0 != core_id) {
+        block_until_secondary_cores_go();
+        acquire_multicore_lock();
+        printf("started hart %"PRIu_word" (core id %"PRIu_word")\n",
+               hart_id, core_id);
 
-    /* Start all cores */
-    int i = 0;
-    while (i < CONFIG_MAX_NUM_NODES && hsm_exists) {
-        i++;
-        if (i != hart_id) {
-            sbi_hart_start(i, secondary_harts, i);
+        if (core_id >= CONFIG_MAX_NUM_NODES) {
+            printf("ERROR: max number of harts exceeded (%d)\n",
+                   (int)CONFIG_MAX_NUM_NODES);
+            abort();
+            UNREACHABLE();
+        }
+    } else {
+        /* We are holding the lock already on the designated primary hart. */
+        printf("Enabling MMU and paging\n");
+    }
+
+    enable_virtual_memory();
+
+    /* We are ready to hand over control to the kernel on this hart. Sync with
+     * all other harts before doing this.
+     */
+    mark_core_ready(core_id);
+    release_multicore_lock();
+    for (int i = 0; i < CONFIG_MAX_NUM_NODES; i++) {
+        while (!is_core_ready(i)) {
+            /* busy waiting loop */
         }
     }
 
-    set_and_wait_for_ready(hart_id, 0);
-#endif
+    if (0 == core_id) {
+        printf("Jumping to kernel-image entry point...\n\n");
+    }
 
-    printf("Enabling MMU and paging\n");
-    enable_virtual_memory();
-
-    printf("Jumping to kernel-image entry point...\n\n");
-    ((init_riscv_kernel_t)kernel_info.virt_entry)(user_info.phys_region_start,
-                                                  user_info.phys_region_end,
-                                                  user_info.phys_virt_offset,
-                                                  user_info.virt_entry,
-                                                  (word_t)dtb,
-                                                  dtb_size
+    /* The hand over interface is the same on all cores. We avoid making
+     * assumption how the parameters are used. The current seL4 kernel
+     * implementation only cares about the DTB on the primary core.
+     */
+    ((init_riscv_kernel_t)kernel_info.virt_entry)(
+        user_info.phys_region_start,
+        user_info.phys_region_end,
+        user_info.phys_virt_offset,
+        user_info.virt_entry,
+        (word_t)dtb,
+        dtb_size
 #if CONFIG_MAX_NUM_NODES > 1
-                                                  ,
-                                                  hart_id,
-                                                  0
-#endif
-                                                 );
+        ,
+        hart_id,
+        core_id
+#endif /* CONFIG_MAX_NUM_NODES > 1 */
+    );
 
     /* We should never get here. */
-    printf("ERROR: Kernel returned back to the ELF Loader\n");
-    return -1;
+    printf("ERROR: back in ELF-loader hart %"PRIu_word" (core ID %"PRIu_word")\n",
+           hart_id, core_id);
+    abort();
+    UNREACHABLE();
 }
 
-#if CONFIG_MAX_NUM_NODES > 1
-
-void secondary_entry(int hart_id, int core_id)
-{
-    while (__atomic_load_n(&secondary_go, __ATOMIC_ACQUIRE) == 0) ;
-
-    while (__atomic_exchange_n(&mutex, 1, __ATOMIC_ACQUIRE) != 0);
-    printf("Secondary entry hart_id:%d core_id:%d\n", hart_id, core_id);
-    __atomic_store_n(&mutex, 0, __ATOMIC_RELEASE);
-
-    set_and_wait_for_ready(hart_id, core_id);
-
-    enable_virtual_memory();
-
-
-    /* If adding or modifying these parameters you will need to update
-        the registers in head.S */
-    ((init_riscv_kernel_t)kernel_info.virt_entry)(user_info.phys_region_start,
-                                                  user_info.phys_region_end,
-                                                  user_info.phys_virt_offset,
-                                                  user_info.virt_entry,
-                                                  (word_t)dtb,
-                                                  dtb_size,
-                                                  hart_id,
-                                                  core_id
-                                                 );
-}
-
-#endif
-
-void main(int hart_id, void *bootloader_dtb)
+void main(word_t hart_id, void *bootloader_dtb)
 {
     /* Printing uses SBI, so there is no need to initialize any UART. */
-    printf("ELF-loader started on (HART %d) (NODES %d)\n",
-           hart_id, CONFIG_MAX_NUM_NODES);
+    printf("ELF-loader started on (HART %"PRIu_word") (NODES %d)\n",
+           hart_id, (unsigned int)CONFIG_MAX_NUM_NODES);
 
     printf("  paddr=[%p..%p]\n", _text, _end - 1);
 
-    /* Run the actual ELF loader, this is not expected to return unless there
-     * was an error.
-     */
-    int ret = run_elfloader(hart_id, bootloader_dtb);
+    /* Load the ELF images and setup the MMU tables. */
+    int ret = run_elfloader(bootloader_dtb);
     if (0 != ret) {
         printf("ERROR: ELF-loader failed, code %d\n", ret);
         /* There is nothing we can do to recover. */
@@ -306,8 +335,57 @@ void main(int hart_id, void *bootloader_dtb)
         UNREACHABLE();
     }
 
-    /* We should never get here. */
-    printf("ERROR: ELF-loader didn't hand over control\n");
-    abort();
+#if CONFIG_MAX_NUM_NODES > 1
+
+    /* Start all secondary cores. We take the multicore lock before that, so
+     * the boot process on the primary core continues without concurrency issues
+     * until things can really run in parallel. Seems the main use case for this
+     * is printing nicely serialized boot messages,
+     */
+    acquire_multicore_lock();
+    set_secondary_cores_go();
+    /* Start all cores */
+    if (!hsm_exists) {
+        /* Without the HSM extension, we can't start the cores explicitly. But
+         * they might be running already, so we do nothing here and just hope
+         * things work out. If the secondary cores don't start we are stuck.
+         */
+        printf("no HSM extension, let's hope secondary cores have been started\n");
+    } else {
+        /* If we are running on a platform with SBI HSM extension support, no
+         * other hart is running. The system starts harts in a random hart, but
+         * the assembly startup code has done the migration to the designated
+         * primary hart already and stopped the others. The global variable
+         * logical_core_id must still be untouched here, otherwise something is
+         * badly wrong.
+         */
+        if (1 != next_logical_core_id) {
+            printf("ERROR: logical core IDs have been assigned already\n");
+            abort();
+            UNREACHABLE();
+        }
+        /* Start all harts */
+        for (int i = 0; i < CONFIG_MAX_NUM_NODES; i++) {
+            word_t remote_hart_id = i + 1; /* hart IDs start at 1 */
+            if (remote_hart_id == CONFIG_FIRST_HART_ID) {
+                assert(remote_hart_id == hart_id)
+                continue; /* this is the current hart */
+            }
+            /* Pass DTB as custom parameter to remote hart */
+            sbi_hsm_ret_t ret = sbi_hart_start(remote_hart_id,
+                                               secondary_harts,
+                                               bootloader_dtb);
+            if (SBI_SUCCESS != ret.code) {
+                printf("ERROR: could not start hart %"PRIu_word", failure"
+                       " (%d, %d)\n", remote_hart_id, ret.code, ret.data);
+                abort();
+                UNREACHABLE();
+            }
+        }
+    }
+
+#endif /* CONFIG_MAX_NUM_NODES > 1 */
+
+    boot_hart(hart_id, 0);
     UNREACHABLE();
 }
