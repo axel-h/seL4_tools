@@ -5,7 +5,7 @@
 #
 
 function(check_arch_clang)
-    if("${KernelSel4Arch}" STREQUAL "ia32")
+    if(KernelSel4ArchIA32)
         string(
             REGEX
                 MATCH
@@ -13,7 +13,7 @@ function(check_arch_clang)
                 correct_triple
                 "${TRIPLE}"
         )
-    elseif("${KernelSel4Arch}" STREQUAL "x86_64")
+    elseif(KernelSel4ArchX86_64)
         string(
             REGEX
                 MATCH
@@ -21,7 +21,7 @@ function(check_arch_clang)
                 correct_triple
                 "${TRIPLE}"
         )
-    elseif("${KernelSel4Arch}" STREQUAL "aarch32" OR "${KernelSel4Arch}" STREQUAL "arm_hyp")
+    elseif(KernelSel4ArchAarch32) # also set for arm_hyp
         string(
             REGEX
                 MATCH
@@ -29,7 +29,7 @@ function(check_arch_clang)
                 correct_triple
                 "${TRIPLE}"
         )
-    elseif("${KernelSel4Arch}" STREQUAL "aarch64")
+    elseif(KernelSel4ArchAarch64)
         string(
             REGEX
                 MATCH
@@ -37,7 +37,7 @@ function(check_arch_clang)
                 correct_triple
                 "${TRIPLE}"
         )
-    elseif("${KernelSel4Arch}" STREQUAL "riscv32")
+    elseif(KernelSel4ArchRiscV32)
         string(
             REGEX
                 MATCH
@@ -45,7 +45,7 @@ function(check_arch_clang)
                 correct_triple
                 "${TRIPLE}"
         )
-    elseif("${KernelSel4Arch}" STREQUAL "riscv64")
+    elseif(KernelSel4ArchRiscV64)
         string(
             REGEX
                 MATCH
@@ -54,34 +54,36 @@ function(check_arch_clang)
                 "${TRIPLE}"
         )
     else()
-        message(SEND_ERROR "KernelSel4Arch is not set to a valid arch")
+        message(FATAL_ERROR "unsupported KernelSel4Arch '${KernelSel4Arch}'")
     endif()
 
     if(NOT correct_triple)
-        message(SEND_ERROR "Clang Triple: '${TRIPLE}' isn't for seL4_arch: ${KernelSel4Arch}")
+        message(FATAL_ERROR "Clang Triple '${TRIPLE}' isn't for KernelSel4Arch '${KernelSel4Arch}'")
     endif()
 
 endfunction()
 
 function(check_arch_gcc)
-    if("${KernelSel4Arch}" STREQUAL "ia32")
+    if(KernelSel4ArchIA32)
         set(compiler_variable "defined(__i386)")
-    elseif("${KernelSel4Arch}" STREQUAL "x86_64")
+    elseif(KernelSel4ArchX86_64)
         set(compiler_variable "defined(__x86_64)")
-    elseif("${KernelSel4Arch}" STREQUAL "aarch32" OR "${KernelSel4Arch}" STREQUAL "arm_hyp")
-        if(KernelArchArmV7a OR KernelArchArmV7ve)
+    elseif(KernelSel4ArchAarch32) # also set for arm_hyp
+        if(KernelArchArmV7a) # also set for KernelArchArmV7ve
             set(compiler_variable "defined(__ARM_ARCH_7A__)")
         elseif(KernelArchArmV8a)
             set(compiler_variable "defined(__ARM_ARCH_8A__)")
+        else()
+            message(FATAL_ERROR "unsupported KernelArmArmV '${KernelArmArmV}'")
         endif()
-    elseif("${KernelSel4Arch}" STREQUAL "aarch64")
+    elseif(KernelSel4ArchAarch64)
         set(compiler_variable "defined(__aarch64__)")
-    elseif("${KernelSel4Arch}" STREQUAL "riscv32")
+    elseif(KernelSel4ArchRiscV32)
         set(compiler_variable "__riscv_xlen == 32")
-    elseif("${KernelSel4Arch}" STREQUAL "riscv64")
+    elseif(KernelSel4ArchRiscV64)
         set(compiler_variable "__riscv_xlen == 64")
     else()
-        message(SEND_ERROR "KernelSel4Arch is not set to a valid arch")
+        message(FATAL_ERROR "unsupported KernelSel4Arch '${KernelSel4Arch}'")
     endif()
 
     set(arch_test "
@@ -95,7 +97,10 @@ function(check_arch_gcc)
     check_c_source_compiles("${arch_test}" compiler_arch_test)
 
     if(NOT compiler_arch_test)
-        message(SEND_ERROR "Compiler: ${CMAKE_C_COMPILER} isn't for seL4_arch: ${KernelSel4Arch}")
+        message(
+            FATAL_ERROR
+                "Compiler '${CMAKE_C_COMPILER}' isn't for KernelSel4Arch '${KernelSel4Arch}'"
+        )
     endif()
 
 endfunction()
