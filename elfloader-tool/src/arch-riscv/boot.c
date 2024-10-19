@@ -190,6 +190,24 @@ static inline void enable_virtual_memory(void)
     ifence();
 }
 
+#define read_const_csr(reg) ({ word_t __tmp; \
+  asm ("csrr %0, " #reg : "=r"(__tmp)); __tmp; })
+
+#define read_csr(reg) ({ word_t __tmp; \
+  asm volatile ("csrr %0, " #reg : "=r"(__tmp)); __tmp; })
+
+#define write_csr(reg, val) ({ \
+  asm volatile ("csrw " #reg ", %0" :: "rK"(val)); })
+
+#define swap_csr(reg, val) ({ word_t __tmp; \
+  asm volatile ("csrrw %0, " #reg ", %1" : "=r"(__tmp) : "rK"(val)); __tmp; })
+
+#define set_csr(reg, bit) ({ word_t __tmp; \
+  asm volatile ("csrrs %0, " #reg ", %1" : "=r"(__tmp) : "rK"(bit)); __tmp; })
+
+#define clear_csr(reg, bit) ({ word_t __tmp; \
+  asm volatile ("csrrc %0, " #reg ", %1" : "=r"(__tmp) : "rK"(bit)); __tmp; })
+
 static int run_elfloader(UNUSED int hart_id, void *bootloader_dtb)
 {
     int ret;
@@ -287,13 +305,25 @@ void secondary_entry(int hart_id, int core_id)
 
 #endif
 
-void main(int hart_id, void *bootloader_dtb)
+void main(void *arg0, void *arg1, UNUSED void *arg2, UNUSED void *arg3)
 {
+    int hart_id = (int)(uintptr_t)arg0;
+    void *bootloader_dtb = arg1;
+
     /* Printing uses SBI, so there is no need to initialize any UART. */
     printf("ELF-loader started on (HART %d) (NODES %d)\n",
            hart_id, CONFIG_MAX_NUM_NODES);
 
+    printf("  args: %p, %p, %p, %p\n", arg0, arg1, arg2, arg3);
     printf("  paddr=[%p..%p]\n", _text, _end - 1);
+
+    // for(unsigned int i=0; i<4; i++) {
+    //     printf("!!  csr_pmpcfg_%d:    %x\n", read_csr(0x3A0+i));
+    // }
+    //
+    // for(unsigned int i=0; i<16; i++) {
+    //     printf("!!  csr_pmpaddr_%d:   %x\n", read_csr(0x3B0+i));
+    // }
 
     /* Run the actual ELF loader, this is not expected to return unless there
      * was an error.

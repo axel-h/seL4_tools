@@ -31,6 +31,8 @@ def parse_args():
                         help="QEMU Memory Size Option", default="@QEMU_SIM_MEM_SIZE_OPT@")
     parser.add_argument('-a', '--args', dest='qemu_sim_args', type=str,
                         help="Arguments to pass onto QEMU", default="@QEMU_SIM_ARGS@")
+    parser.add_argument('--bios', dest='qemu_sim_bios_file', type=str,
+                        help="BIOS file to pass onto QEMU", default="@QEMU_SIM_BIOS_FILE@")
     parser.add_argument('-k', '--kernel', dest='qemu_sim_kernel_file', type=str,
                         help="Kernel file to pass onto QEMU", default="@QEMU_SIM_KERNEL_FILE@")
     parser.add_argument('-i', '--initrd', dest='qemu_sim_initrd_file', type=str,

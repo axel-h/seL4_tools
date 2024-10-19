@@ -282,6 +282,7 @@ static int load_elf(
     /* Print diagnostics. */
     printf("  paddr=[%p..%p]\n", dest_paddr, dest_paddr + image_size - 1);
     printf("  vaddr=[%p..%p]\n", (vaddr_t)min_vaddr, (vaddr_t)max_vaddr - 1);
+    printf("  size=%zu\n", image_size);
     printf("  virt_entry=%p\n", (vaddr_t)elf_getEntryPoint(elf_blob));
 
     /* Ensure the ELF file is valid. */
@@ -338,6 +339,7 @@ static int load_elf(
          * memcpy to a bunch of magic offsets. Explicit numbers for sizes
          * and offsets are used so that it is clear exactly what the layout
          * is */
+        printf("copying %d headers of size %d\n", phnum, phsize);
         memcpy((void *)dest_paddr, &phnum, 4);
         memcpy((void *)(dest_paddr + 4), &phsize, 4);
         memcpy((void *)(dest_paddr + 8), (void *)source_paddr, phsize * phnum);
@@ -397,6 +399,28 @@ int load_images(
 
     void const *cpio = _archive_start;
     size_t cpio_len = _archive_start_end - _archive_start;
+
+    // printf("integer types and sizes:\n");
+    // printf("  sizeof(void *)       is  %u\n", sizeof(void *));
+    // printf("  sizeof(size_t)       is  %u\n", sizeof(size_t));
+    // printf("  sizeof(uintptr_t)    is  %u\n", sizeof(uintptr_t));
+    // printf("  PRIu64               is  '%s'\n", PRIu64);
+    // printf("  PRIuPTR              is  '%s'\n", PRIuPTR);
+    // printf("  PRIuMAX              is  '%s'\n", PRIuMAX);
+    // printf("  sizeof(word_t)       is  %u\n", sizeof(word_t));
+
+    printf("CPIO archive contents:\n");
+    size_t cnt = 0;
+    for (;;) {
+        const char *name = 0;
+        unsigned long size = 0;
+        void const *blob = cpio_get_entry(cpio, cpio_len, cnt, &name, &size);
+        if (!blob) {
+            break;
+        }
+        printf("  %zu: %s (%ld byte)\n", cnt, name, size);
+        cnt++;
+    }
 
     /* Load kernel. */
     unsigned long cpio_file_size = 0;
@@ -574,6 +598,7 @@ int load_images(
 
     *num_images = 0;
     for (unsigned int i = 0; i < max_user_images; i++) {
+        printf("loading image %d...\n", i);
         /* Fetch info about the next ELF file in the archive. */
         unsigned long cpio_file_size = 0;
         void const *user_elf = cpio_get_entry(cpio,
