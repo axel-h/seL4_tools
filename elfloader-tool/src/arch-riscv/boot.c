@@ -60,8 +60,7 @@ unsigned long l2pt_elf[PTES_PER_PT] __attribute__((aligned(4096)));
 char elfloader_stack_alloc[BIT(CONFIG_KERNEL_STACK_BITS)];
 
 /* first HART will initialise these */
-void const *dtb = NULL;
-size_t dtb_size = 0;
+dtb_info_t dtb_info;
 
 /*
  * overwrite the default implementation for abort()
@@ -194,10 +193,12 @@ static int run_elfloader(UNUSED int hart_id, void *bootloader_dtb)
 {
     int ret;
 
+    dtb_info.phys_base = (paddr_t)bootloader_dtb;
+    dtb_info.size = (size_t)(-1);
+
     /* Unpack ELF images into memory. */
     unsigned int num_apps = 0;
-    ret = load_images(&kernel_info, &user_info, 1, &num_apps,
-                      bootloader_dtb, &dtb, &dtb_size);
+    ret = load_images(&kernel_info, &user_info, 1, &num_apps, &dtb_info);
     if (0 != ret) {
         printf("ERROR: image loading failed, code %d\n", ret);
         return -1;
@@ -243,8 +244,8 @@ static int run_elfloader(UNUSED int hart_id, void *bootloader_dtb)
                                                   user_info.phys_region_end,
                                                   user_info.phys_virt_offset,
                                                   user_info.virt_entry,
-                                                  (word_t)dtb,
-                                                  dtb_size
+                                                  (word_t)dtb_info.phys_base,
+                                                  dtb_info.size
 #if CONFIG_MAX_NUM_NODES > 1
                                                   ,
                                                   hart_id,
@@ -278,8 +279,8 @@ void secondary_entry(int hart_id, int core_id)
                                                   user_info.phys_region_end,
                                                   user_info.phys_virt_offset,
                                                   user_info.virt_entry,
-                                                  (word_t)dtb,
-                                                  dtb_size,
+                                                  (word_t)dtb_info.phys_base,
+                                                  dtb_info.size,
                                                   hart_id,
                                                   core_id
                                                  );
