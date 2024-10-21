@@ -18,7 +18,6 @@ if(NOT KERNEL_FLAGS_PATH)
     message(FATAL_ERROR "KERNEL_FLAGS_PATH is not set.")
 endif()
 include(${KERNEL_FLAGS_PATH})
-include(cpio)
 
 set(configure_string "")
 
@@ -105,12 +104,6 @@ config_option(
 
 add_config_library(elfloader "${configure_string}")
 
-add_compile_options(-D_XOPEN_SOURCE=700 -ffreestanding -Wall -Werror -W -Wextra)
-set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/arch-${KernelArch}/linker.lds")
-if(KernelArchRiscV)
-    add_compile_options(-mcmodel=medany)
-endif()
-
 if(ElfloaderArmV8LeaveAarch64)
     # We need to build a aarch64 assembly file during an aarch32 build. We have
     # to write custom rules to do this as CMake doesn't support multiple compilers
@@ -151,17 +144,32 @@ if(ElfloaderArmV8LeaveAarch64)
     set_property(SOURCE src/arch-arm/32/crt0.S PROPERTY OBJECT_DEPENDS ${armv8_leave_arch_bin})
 endif()
 
-if(KernelSel4ArchAarch64)
-    # NEON registers aren't necessarily initialized for use before elfloader starts
-    add_compile_options(-mgeneral-regs-only)
-endif()
+set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/arch-${KernelArch}/linker.lds")
 
-# Don't allow unaligned data store/load instructions as this will cause an alignment
-# fault before the MMU is turned on.
-if(KernelSel4ArchAarch64)
-    add_compile_options(-mstrict-align)
-elseif(KernelSel4ArchAarch32)
-    add_compile_options(-mno-unaligned-access)
+add_compile_options(
+    # support POSIX 7 (2018), see also https://pubs.opengroup.org/onlinepubs/9699919799
+    -D_XOPEN_SOURCE=700
+    -ffreestanding
+    -W
+    -Wall
+    -Werror
+    -Wextra
+)
+
+if(KernelSel4ArchAarch32)
+    add_compile_options(
+        # assume unaligned store/load is not supported
+        -mno-unaligned-access
+    )
+elseif(KernelSel4ArchAarch64)
+    add_compile_options(
+        # assume NEON registers are not available
+        -mgeneral-regs-only
+        # assume unaligned store/load is not supported
+        -mstrict-align
+    )
+elseif(KernelArchRiscV)
+    add_compile_options(-mcmodel=medany)
 endif()
 
 if(KernelArchARM)
@@ -240,10 +248,9 @@ if(ElfloaderImageEFI)
             src/binaries/efi/gnuefi/reloc_${gnuefiArch}.c
     )
     # We use gnu-efi's linker script on EFI.
-    set(linkerScript ${CMAKE_CURRENT_LIST_DIR}/src/binaries/efi/gnuefi/elf_${gnuefiArch}_efi.lds)
+    set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/binaries/efi/gnuefi/elf_${gnuefiArch}_efi.lds")
 else()
-    add_compile_options(-fno-pic)
-    add_compile_options(-fno-pie)
+    add_compile_options(-fno-pic -fno-pie)
 endif()
 
 # Sort files to make build reproducible
@@ -251,17 +258,20 @@ list(SORT files)
 
 set(cpio_files "")
 list(APPEND cpio_files "$<TARGET_FILE:kernel.elf>")
+
 if(ElfloaderIncludeDtb)
     list(APPEND cpio_files "${KernelDTBPath}")
 endif()
+
 list(APPEND cpio_files "$<TARGET_PROPERTY:rootserver_image,ROOTSERVER_IMAGE>")
+
 if(NOT ${ElfloaderHashInstructions} STREQUAL "hash_none")
-    set(hash_command "")
-    if(ElfloaderHashSHA)
-        set(hash_command "sha256sum")
-    else()
+
+    set(hash_command "sha256sum") # default to SHA256
+    if(NOT ElfloaderHashSHA)
         set(hash_command "md5sum")
     endif()
+
     add_custom_command(
         OUTPUT "kernel.bin"
         COMMAND
@@ -270,6 +280,8 @@ if(NOT ${ElfloaderHashInstructions} STREQUAL "hash_none")
         VERBATIM
         DEPENDS "$<TARGET_FILE:kernel.elf>"
     )
+    list(APPEND cpio_files "${CMAKE_CURRENT_BINARY_DIR}/kernel.bin")
+
     add_custom_command(
         OUTPUT "app.bin"
         COMMAND
@@ -278,11 +290,12 @@ if(NOT ${ElfloaderHashInstructions} STREQUAL "hash_none")
         VERBATIM
         DEPENDS "$<TARGET_PROPERTY:rootserver_image,ROOTSERVER_IMAGE>"
     )
-    list(APPEND cpio_files "${CMAKE_CURRENT_BINARY_DIR}/kernel.bin")
     list(APPEND cpio_files "${CMAKE_CURRENT_BINARY_DIR}/app.bin")
+
 endif()
 
 # Construct the ELF loader's payload.
+include(cpio)
 MakeCPIO(archive.o "${cpio_files}" CPIO_SYMBOL _archive_start)
 
 set(PLATFORM_HEADER_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen_headers")
