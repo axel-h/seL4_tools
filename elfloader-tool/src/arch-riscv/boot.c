@@ -9,6 +9,7 @@
 #include <elfloader/gen_config.h>
 
 #include <types.h>
+#include <strops.h>
 #include <binaries/elf/elf.h>
 #include <elfloader.h>
 #include <abort.h>
@@ -50,8 +51,10 @@
 
 #define GET_PT_INDEX(addr, n) (((addr) >> (((PT_INDEX_BITS) * ((CONFIG_PT_LEVELS) - (n))) + RISCV_PGSHIFT)) % PTES_PER_PT)
 
-struct image_info kernel_info;
-struct image_info user_info;
+/* Actually, this has to be global for SMP only, becuase we have to share some
+ * pieces of information with the secondary harts.
+ */
+static elfloader_ctx_t elfloader_ctx;
 
 unsigned long l1pt[PTES_PER_PT] __attribute__((aligned(4096)));
 #if __riscv_xlen == 64
@@ -59,9 +62,7 @@ unsigned long l2pt[PTES_PER_PT] __attribute__((aligned(4096)));
 unsigned long l2pt_elf[PTES_PER_PT] __attribute__((aligned(4096)));
 #endif
 
-/* first HART will initialise these */
-void const *dtb = NULL;
-size_t dtb_size = 0;
+char elfloader_stack_alloc[BIT(CONFIG_KERNEL_STACK_BITS)];
 
 /*
  * overwrite the default implementation for abort()
@@ -179,26 +180,24 @@ static inline void enable_virtual_memory(void)
     ifence();
 }
 
-static int run_elfloader(UNUSED int hart_id, void *bootloader_dtb)
+static int run_elfloader(elfloader_ctx_t *ctx, UNUSED int hart_id)
 {
     int ret;
 
     /* Unpack ELF images into memory. */
-    unsigned int num_apps = 0;
-    ret = load_images(&kernel_info, &user_info, 1, &num_apps,
-                      bootloader_dtb, &dtb, &dtb_size);
+    ret = load_images(ctx);
     if (0 != ret) {
         printf("ERROR: image loading failed, code %d\n", ret);
         return -1;
     }
 
-    if (num_apps != 1) {
-        printf("ERROR: expected to load just 1 app, actually loaded %u apps\n",
-               num_apps);
+    if (ctx->loaded_user_images != 1) {
+        printf("ERROR: expected to load exactly 1 app, actually loaded %u apps\n",
+               ctx->loaded_user_images);
         return -1;
     }
 
-    ret = map_kernel_window(&kernel_info);
+    ret = map_kernel_window(&ctx->kernel);
     if (0 != ret) {
         printf("ERROR: could not map kernel window, code %d\n", ret);
         return -1;
@@ -227,15 +226,20 @@ static int run_elfloader(UNUSED int hart_id, void *bootloader_dtb)
     printf("Enabling MMU and paging\n");
     enable_virtual_memory();
 
+    /* The primary hart uses the first user image. */
+    struct image_info *user_img = &ctx->user[0];
+
     printf("Jumping to kernel-image entry point...\n\n");
-    ((init_riscv_kernel_t)kernel_info.virt_entry)(user_info.phys_region_start,
-                                                  user_info.phys_region_end,
-                                                  user_info.phys_virt_offset,
-                                                  user_info.virt_entry,
-                                                  (word_t)dtb,
-                                                  dtb_size,
-                                                  hart_id,
-                                                  0);
+    ((init_riscv_kernel_t)ctx->kernel.virt_entry)(
+        user_img->phys_region_start,
+        user_img->phys_region_end,
+        user_img->phys_virt_offset,
+        user_img->virt_entry,
+        (word_t)ctx->dtb.phys_base,
+        ctx->dtb.size,
+        hart_id,
+        0
+    );
 
     /* We should never get here. */
     printf("ERROR: Kernel returned back to the ELF Loader\n");
@@ -246,6 +250,9 @@ static int run_elfloader(UNUSED int hart_id, void *bootloader_dtb)
 
 void secondary_entry(int hart_id, int core_id)
 {
+    /* Get the context, which was initialized by the primary hart. */
+    elfloader_ctx_t *ctx = &elfloader_ctx;
+
     while (__atomic_load_n(&secondary_go, __ATOMIC_ACQUIRE) == 0) ;
 
     while (__atomic_exchange_n(&mutex, 1, __ATOMIC_ACQUIRE) != 0);
@@ -256,18 +263,23 @@ void secondary_entry(int hart_id, int core_id)
 
     enable_virtual_memory();
 
-
+    /* There is support for multiple user images, and secondary harts might
+     * start ther own image. Currently this is not implemented, the first image
+     * is used everywhere,
+     */
+    struct image_info *user_img = &ctx->user[0];
     /* If adding or modifying these parameters you will need to update
-        the registers in head.S */
-    ((init_riscv_kernel_t)kernel_info.virt_entry)(user_info.phys_region_start,
-                                                  user_info.phys_region_end,
-                                                  user_info.phys_virt_offset,
-                                                  user_info.virt_entry,
-                                                  (word_t)dtb,
-                                                  dtb_size,
-                                                  hart_id,
-                                                  core_id
-                                                 );
+     * the registers in head.S
+     */
+    ((init_riscv_kernel_t)ctx->kernel.virt_entry)(
+        user_img->phys_region_start,
+        user_img->phys_region_end,
+        user_img->phys_virt_offset,
+        user_img->virt_entry,
+        (word_t)ctx->dtb.phys_base,
+        ctx->dtb.size,
+        hart_id,
+        core_id);
 }
 
 #endif
@@ -280,10 +292,20 @@ void main(int hart_id, void *bootloader_dtb)
 
     printf("  paddr=[%p..%p]\n", _text, (uintptr_t)_end - 1);
 
+    /* Ensure context is clean. */
+    elfloader_ctx_t *ctx = &elfloader_ctx;
+    memset(ctx, 0, sizeof(*ctx));
+
+    /* Assume a DTB is passed if the pointer is not NULL. */
+    if (bootloader_dtb) {
+        ctx->dtb.phys_base = (paddr_t)bootloader_dtb;
+        ctx->dtb.size = (size_t)(-1); /* size unknown */
+    }
+
     /* Run the actual ELF loader, this is not expected to return unless there
      * was an error.
      */
-    int ret = run_elfloader(hart_id, bootloader_dtb);
+    int ret = run_elfloader(ctx, hart_id);
     if (0 != ret) {
         printf("ERROR: ELF-loader failed, code %d\n", ret);
         /* There is nothing we can do to recover. */
