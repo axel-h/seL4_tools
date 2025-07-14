@@ -17,12 +17,17 @@ word_t read_cpuid_mpidr(void)
 }
 
 #define CPSR_MODE_MASK          0x1f
-#define CPSR_MODE_HYPERVISOR    0x1a
-word_t is_hyp_mode(void)
+word_t get_cpu_mode(void)
 {
     uint32_t val;
     asm volatile("mrs %0, cpsr" : "=r"(val) :: "cc");
-    return ((val & CPSR_MODE_MASK) == CPSR_MODE_HYPERVISOR);
+    return (val & CPSR_MODE_MASK);
+}
+
+#define CPSR_MODE_HYPERVISOR    0x1a
+word_t is_hyp_mode(void)
+{
+    return (get_cpu_mode() == CPSR_MODE_HYPERVISOR);
 }
 
 /* read ID register from CPUID */
