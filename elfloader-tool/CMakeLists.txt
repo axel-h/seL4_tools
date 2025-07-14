@@ -106,6 +106,7 @@ config_option(
 add_config_library(elfloader "${configure_string}")
 
 add_compile_options(
+    # support POSIX 7 (2018), see also https://pubs.opengroup.org/onlinepubs/9699919799
     -D_XOPEN_SOURCE=700
     -ffreestanding
     -Wall
