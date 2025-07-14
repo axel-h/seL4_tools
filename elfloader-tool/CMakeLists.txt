@@ -112,6 +112,7 @@ add_compile_options(
     -Wall
     -Werror
     -Wextra
+    -Wshadow
 )
 set(linkerScript "${CMAKE_CURRENT_LIST_DIR}/src/linker.lds")
 if(KernelArchRiscV)
